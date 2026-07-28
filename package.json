@@ -1,0 +1,80 @@
+{
+  "name": "nobugdb-orm",
+  "version": "0.1.0",
+  "description": "TypeScript Data Mapper ORM for NoBugDB",
+  "keywords": [
+    "nobugdb",
+    "orm",
+    "typescript",
+    "express",
+    "sql"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aram47/NoBugDB-ORM.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Aram47/NoBugDB-ORM/issues"
+  },
+  "homepage": "https://github.com/Aram47/NoBugDB-ORM#readme",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./express": {
+      "types": "./dist/esm/express/index.d.ts",
+      "import": "./dist/esm/express/index.js",
+      "require": "./dist/cjs/express/index.js"
+    }
+  },
+  "peerDependencies": {
+    "express": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "bin": {
+    "nobugdb-orm": "./dist/esm/cli/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs",
+    "build:esm": "tsc -p tsconfig.build.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "jiti": "^2.4.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "@types/node": "^22.15.29",
+    "eslint": "^9.28.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.0",
+    "vitest": "^3.1.4"
+  }
+}
