@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 In `0.x`, the API may break between minor versions; breaking changes are listed here.
 
-## [0.1.0] - 2026-07-28
+## [0.1.1] - 2026-07-28
 
 First public release of `nobugdb-orm`.
 

@@ -3,6 +3,6 @@ import { VERSION } from '../../src/index.js';
 
 describe('VERSION', () => {
   it('exports the package semver', () => {
-    expect(VERSION).toBe('0.1.0');
+    expect(VERSION).toBe('0.1.1');
   });
 });

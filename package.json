@@ -1,6 +1,6 @@
 {
   "name": "nobugdb-orm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript Data Mapper ORM for NoBugDB",
   "keywords": [
     "nobugdb",
