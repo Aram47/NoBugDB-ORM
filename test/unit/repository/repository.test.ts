@@ -147,4 +147,95 @@ describe('Repository', () => {
     const n = await repo.count();
     expect(n).toBe(3);
   });
+
+  it('requires INT PK value on insert', async () => {
+    interface Item {
+      id: number;
+      name: string;
+    }
+    const ItemMeta = defineEntity<Item>({
+      name: 'Item',
+      tableName: 'items',
+      columns: {
+        id: { type: 'INT', primary: true },
+        name: { type: 'STRING' },
+      },
+    });
+    const mapper = new EntityMapper();
+    const registry = new MetadataRegistry();
+    registry.register(ItemMeta);
+    const uow = new UnitOfWork(new IdentityMap(), mapper);
+    const repo = new Repository<Item>({
+      executor: mockExecutor(),
+      meta: ItemMeta,
+      mapper,
+      registry,
+      unitOfWork: uow,
+      flush: async () => undefined,
+    });
+
+    await expect(repo.insert({ name: 'x' } as Item)).rejects.toMatchObject({
+      code: 'METADATA',
+    });
+    const inserted = await repo.insert({ id: 42, name: 'x' });
+    expect(inserted.id).toBe(42);
+  });
+
+  it('findById accepts composite key object', async () => {
+    interface OrderItem {
+      orderId: string;
+      productId: string;
+      qty: number;
+    }
+    const OrderItemMeta = defineEntity<OrderItem>({
+      name: 'OrderItem',
+      tableName: 'order_items',
+      primaryColumns: ['orderId', 'productId'],
+      columns: {
+        orderId: { type: 'UUID', primary: true },
+        productId: { type: 'UUID', primary: true },
+        qty: { type: 'INT' },
+      },
+    });
+    const executor = mockExecutor((sqlText) => {
+      if (sqlText.startsWith('EXECUTE')) {
+        return {
+          success: true,
+          message: '',
+          columns: ['orderId', 'productId', 'qty'],
+          rows: [
+            [
+              '11111111-1111-4111-8111-111111111111',
+              '22222222-2222-4222-8222-222222222222',
+              3,
+            ],
+          ],
+        };
+      }
+      return undefined;
+    });
+    const mapper = new EntityMapper();
+    const registry = new MetadataRegistry();
+    registry.register(OrderItemMeta);
+    const uow = new UnitOfWork(new IdentityMap(), mapper);
+    const repo = new Repository<OrderItem>({
+      executor,
+      meta: OrderItemMeta,
+      mapper,
+      registry,
+      unitOfWork: uow,
+      flush: async () => undefined,
+    });
+
+    const found = await repo.findById({
+      orderId: '11111111-1111-4111-8111-111111111111',
+      productId: '22222222-2222-4222-8222-222222222222',
+    });
+    expect(found?.qty).toBe(3);
+    const again = await repo.findById({
+      orderId: '11111111-1111-4111-8111-111111111111',
+      productId: '22222222-2222-4222-8222-222222222222',
+    });
+    expect(again).toBe(found);
+  });
 });

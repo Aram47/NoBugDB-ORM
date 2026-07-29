@@ -27,7 +27,8 @@ Express is an **optional** peer dependency — only needed if you use `nobugdb-o
 - Data Mapper + Repository (`EntityManager`, not Active Record)
 - TCP driver for NoBugDB wire protocol (`AUTH` / `QUERY` / `PING` / `QUIT`)
 - Connection pool with sticky transactions (default `max: 4`)
-- Client-generated **UUID** primary keys (no `RETURNING` / `SERIAL`)
+- Client-generated or auto UUID primary keys (no `RETURNING` / `SERIAL`); also INT/STRING and composite PKs when supplied by the client
+
 
 ## Data Mapper usage
 
@@ -171,17 +172,29 @@ await pool.end();
 |------|-----------|
 | DML | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 | Clauses | `JOIN` (INNER/LEFT/RIGHT/FULL/CROSS), `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT` / `OFFSET` |
+| Set operations | Top-level `UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT` (no `INTERSECT ALL` / `EXCEPT ALL`) |
+| Subqueries | `IN` / `NOT IN` / `EXISTS` / `NOT EXISTS` / scalar via `whereInSubquery` / `whereExists` / `sql.subquery` (correlated refs via `sql.ref`); no set-ops inside subquery |
 | Aggregates | Basic (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`) via expression helpers |
+| Scalars | `UPPER` / `LOWER` / `LENGTH` / `COALESCE` / `NULLIF` / `SUBSTRING` / `CAST` / `CURRENT_DATE` via `sql.*` (plus generic `sql.fn` for builtins/UDF) |
+| Window functions | `ROW_NUMBER` / `RANK` / `DENSE_RANK` / running `SUM`·`AVG` with `OVER` (`PARTITION BY` optional, `ORDER BY` required); no LEAD/LAG/NTILE, named `WINDOW`, or explicit frame |
 | Types | `INT`, `FLOAT`, `STRING`, `BOOLEAN`, `DATE`, `UUID` |
-| Not supported | `LIKE`, `UNION`, CTE, window functions, `UPSERT`, `RETURNING`, `SERIAL` / sequences |
+| Admin | `DataSource.explain` / `explainQuery` / `vacuum` (and `EntityManager.explain` / `vacuum`) |
+| Not supported | `LIKE`, CTE, `UPSERT`, `RETURNING`, `SERIAL` / sequences |
 
 Wire values: `DATE` and `UUID` travel as strings; the ORM maps `DATE` ↔ `Date` and keeps UUID as `string`.
 
 ## Limitations
 
 - Server read buffer is ~**4 KiB** — large queries / wide rows fail fast; keep payloads small.
-- No `SERIAL` / `RETURNING` — use client-generated **UUID** primary keys.
-- No `LIKE` / `UNION` / CTE / window functions / `UPSERT`.
+- No `SERIAL` / `RETURNING` — UUID PKs auto-generate by default; non-UUID and composite PKs must be supplied by the client.
+
+- No `LIKE` / CTE / `UPSERT`.
+- Window functions: only `ROW_NUMBER` / `RANK` / `DENSE_RANK` / running `SUM`·`AVG`; `OVER` requires `ORDER BY`; no LEAD/LAG/NTILE, named `WINDOW`, or explicit `ROWS`/`RANGE` frame.
+- Set operations are **top-level only** (`UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT`); no `INTERSECT ALL` / `EXCEPT ALL`.
+- Subqueries support `IN` / `EXISTS` / scalar; **set operations inside a subquery are rejected**.
+- Partitioning: `RANGE` / `HASH` only — **no SUBPARTITION**; **no FK on partitioned parent**. Drop parent cascades children; drop child keeps parent.
+- Routines: IN params only — **no OUT/INOUT** or table-valued UDFs; procedure bodies cannot nest TX-`BEGIN`; body must not contain nested `$$`. CREATE/DROP require **admin**; **reader cannot CALL**. Use `sql.fn('udf', …)` for UDF in SELECT.
+- Admin: `EXPLAIN` **executes** the statement (side effects apply); reader may EXPLAIN allowed read statements. `vacuum()` is bare global `VACUUM` only — **no per-table** option; requires **admin**.
 - No runtime introspection (`information_schema` does not exist) — schema comes from entity metadata + migrations.
 - No TLS on the wire yet (development-grade auth; do not log passwords).
 - Views are read-only — never write through view targets.
@@ -235,6 +248,48 @@ export async function down(ctx: MigrationContext): Promise<void> {
 ```
 
 Filename must be `{timestamp}_{slug}.ts` and match exported `id`.
+
+### Partitioned tables
+
+```ts
+await ctx.schema.createPartitionedTable(
+  'sales',
+  { strategy: 'RANGE', column: 'y' },
+  (t) => {
+    t.int('id').primary();
+    t.int('y').notNull();
+  },
+);
+await ctx.schema.createPartition('sales_2024', 'sales', { from: 2024, to: 2025 });
+await ctx.schema.createPartition('sales_h0', 'sales_hash', { modulus: 4, remainder: 0 });
+```
+
+`createPartition` does not redefine columns (schema is inherited from the parent). Use `dropTable` to remove a partition or the parent.
+
+### Routines (functions & procedures)
+
+```ts
+await ctx.schema.createFunction('double_it', {
+  params: [{ name: 'x', type: 'INT' }],
+  returns: 'INT',
+  body: 'RETURN x * 2;',
+});
+
+await ctx.schema.createProcedure('add_user', {
+  params: [
+    { name: 'uid', type: 'INT' },
+    { name: 'uname', type: 'STRING' },
+  ],
+  body: 'INSERT INTO users (id, name) VALUES (uid, uname);',
+});
+
+await ctx.schema.call('add_user', [1, 'Ada']);
+// or at runtime:
+await ds.callProcedure('add_user', [1, 'Ada']);
+// SELECT UDF: sql.fn('double_it', 'id')
+```
+
+Use `dropFunction` / `dropProcedure` in `down`. Function body style `'expr'` renders `AS (body)` instead of `AS $$…$$`.
 
 ### Migrator API
 

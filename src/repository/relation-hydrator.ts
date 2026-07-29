@@ -44,7 +44,7 @@ export class RelationHydrator {
     for (const spec of joined) {
       const relatedRow = this.#extractPrefixedRow(row, spec.prefix);
       const targetMeta = spec.meta;
-      const pkCol = targetMeta.columns[targetMeta.primaryKey]!.columnName;
+      const pkCol = targetMeta.columns[targetMeta.primaryKeys[0]!]!.columnName;
 
       if (
         relatedRow === null ||

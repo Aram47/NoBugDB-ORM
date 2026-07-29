@@ -8,6 +8,8 @@ export interface ColumnState {
   unique: boolean;
   notNull: boolean;
   defaultValue?: unknown;
+  /** Column-level CHECK predicate (trusted SQL fragment). */
+  checkExpression?: string;
   references?: {
     table: string;
     column: string;

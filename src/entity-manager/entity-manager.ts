@@ -1,9 +1,19 @@
-import { randomUUID } from 'node:crypto';
+import {
+  generateExplainSql,
+  generateVacuumSql,
+  toExplainResult,
+} from '../admin/index.js';
+import type { ExplainResult } from '../admin/index.js';
 import { NoBugDbError } from '../driver/errors.js';
 import type { QueryResult } from '../driver/types.js';
 import { EntityMapper } from '../metadata/entity-mapper.js';
 import type { MetadataRegistry } from '../metadata/metadata-registry.js';
+import {
+  ensureGeneratedPrimaryKeys,
+  primaryKeyWhereDb,
+} from '../metadata/primary-key.js';
 import type { EntityMetadata } from '../metadata/types.js';
+import { generateCallSql } from '../migrations/ddl/sql-generator.js';
 import type { QueryExecutor } from '../query-builder/prepared.js';
 import { QueryBuilder } from '../query-builder/query-builder.js';
 import type { FindOptions } from '../repository/find-options.js';
@@ -106,10 +116,7 @@ export class EntityManager {
 
   persist<T extends object>(entity: T): void {
     const meta = this.#resolveMeta(entity);
-    const pk = this.#mapper.getPrimaryKeyValue(entity, meta);
-    if (pk === undefined || pk === null || pk === '') {
-      (entity as Record<string, unknown>)[meta.primaryKey] = randomUUID();
-    }
+    ensureGeneratedPrimaryKeys(entity, meta);
     this.#unitOfWork.persist(entity, meta);
     this.#metaByEntity.set(entity, meta);
   }
@@ -126,11 +133,7 @@ export class EntityManager {
 
     for (const tracked of inserts) {
       const meta = tracked.meta;
-      const pk = this.#mapper.getPrimaryKeyValue(tracked.entity, meta);
-      if (pk === undefined || pk === null || pk === '') {
-        (tracked.entity as Record<string, unknown>)[meta.primaryKey] =
-          randomUUID();
-      }
+      ensureGeneratedPrimaryKeys(tracked.entity, meta);
       const row = this.#mapper.toDbRow(tracked.entity, meta);
       await new QueryBuilder(this.#executor, {
         columnTypes: this.#mapper.getDbColumnTypes(meta),
@@ -150,26 +153,22 @@ export class EntityManager {
       if (Object.keys(patch).length === 0) {
         continue;
       }
-      const pk = this.#mapper.getPrimaryKeyValue(tracked.entity, meta);
-      const pkCol = meta.columns[meta.primaryKey]!.columnName;
       await new QueryBuilder(this.#executor, {
         columnTypes: this.#mapper.getDbColumnTypes(meta),
       })
         .update(meta.tableName)
         .set(patch)
-        .where({ [pkCol]: pk })
+        .where(primaryKeyWhereDb(tracked.entity, meta))
         .executeCommand();
     }
 
     for (const tracked of deletes) {
       const meta = tracked.meta;
-      const pk = this.#mapper.getPrimaryKeyValue(tracked.entity, meta);
-      const pkCol = meta.columns[meta.primaryKey]!.columnName;
       await new QueryBuilder(this.#executor, {
         columnTypes: this.#mapper.getDbColumnTypes(meta),
       })
         .deleteFrom(meta.tableName)
-        .where({ [pkCol]: pk })
+        .where(primaryKeyWhereDb(tracked.entity, meta))
         .executeCommand();
     }
 
@@ -197,6 +196,35 @@ export class EntityManager {
 
   async query(sqlText: string): Promise<QueryResult> {
     return this.#executor.query(sqlText);
+  }
+
+  /**
+   * Execute `CALL name(args)` on this manager's executor (supports TX sticky conn).
+   * Denied for reader role on the server. No OUT/INOUT params.
+   */
+  async callProcedure(
+    name: string,
+    args: unknown[] = [],
+  ): Promise<QueryResult> {
+    return this.#executor.query(generateCallSql(name, args));
+  }
+
+  /**
+   * Run `EXPLAIN <statement>` on this manager's executor.
+   * The statement is **executed** (side effects apply). Reader may EXPLAIN
+   * allowed read statements; writers/DDL still require admin.
+   */
+  async explain(sql: string): Promise<ExplainResult> {
+    const raw = await this.#executor.query(generateExplainSql(sql));
+    return toExplainResult(raw);
+  }
+
+  /**
+   * Run global `VACUUM` on this manager's executor. Requires admin role.
+   * Per-table vacuum is not exposed.
+   */
+  async vacuum(): Promise<QueryResult> {
+    return this.#executor.query(generateVacuumSql());
   }
 
   /**

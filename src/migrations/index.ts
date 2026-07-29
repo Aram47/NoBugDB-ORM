@@ -1,14 +1,25 @@
 export type {
   ColumnBuilder,
+  CreateFunctionOptions,
+  CreateProcedureOptions,
+  CreateTriggerOptions,
   FkOptions,
   FkReferentialAction,
   AlterTableBuilder,
+  FunctionBodyStyle,
+  HashPartitionValues,
   MigrationBuilder,
   MigrationContext,
   MigrationModule,
   MigrationStatusEntry,
   MigratorOptions,
+  PartitionedTableOptions,
+  PartitionStrategy,
+  RangePartitionValues,
+  RoutineParam,
   TableBuilder,
+  TriggerEvent,
+  TriggerTiming,
 } from './types.js';
 
 export { Migrator } from './migrator.js';

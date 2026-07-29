@@ -141,8 +141,8 @@ Identity Map key: стабильная сериализация всех PK part
 
 ## Definition of Done
 
-- [ ] Composite PK + non-UUID PK в metadata и Repository
-- [ ] Multi-column UNIQUE (CREATE; ALTER если движок умеет)
-- [ ] UUID auto-generate сохранён по умолчанию для UUID PK
-- [ ] Unit + integration тесты; CHANGELOG / README Limitations обновлены
-- [ ] Нет мёртвого UUID-only assert кода
+- [x] Composite PK + non-UUID PK в metadata и Repository
+- [x] Multi-column UNIQUE (CREATE; ALTER если движок умеет)
+- [x] UUID auto-generate сохранён по умолчанию для UUID PK
+- [x] Unit + integration тесты; CHANGELOG / README Limitations обновлены
+- [x] Нет мёртвого UUID-only assert кода

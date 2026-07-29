@@ -92,7 +92,7 @@ qb.select(
 
 ## Definition of Done
 
-- [ ] `whereInSubquery` / `whereExists` / `sql.subquery` в API
-- [ ] Unit + integration (включая correlated)
-- [ ] Документирован запрет set-op внутри subquery
-- [ ] Нет мёртвого кода в WHERE compiler
+- [x] `whereInSubquery` / `whereExists` / `sql.subquery` в API
+- [x] Unit + integration (включая correlated)
+- [x] Документирован запрет set-op внутри subquery
+- [x] Нет мёртвого кода в WHERE compiler

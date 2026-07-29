@@ -1,6 +1,15 @@
 import type { NoBugDbDataType } from '../../types/type-mapper.js';
 import type { ColumnBuilder, FkOptions, TableBuilder } from '../types.js';
+import {
+  assertValidCheckExpression,
+  assertValidCheckName,
+  type CheckConstraintState,
+} from './check-constraint.js';
 import { createColumnState, type ColumnState } from './column-state.js';
+import type {
+  TableKeyConstraintState,
+  TableUniqueConstraintState,
+} from './table-constraint.js';
 
 export class ColumnBuilderImpl implements ColumnBuilder {
   readonly #column: ColumnState;
@@ -43,10 +52,26 @@ export class ColumnBuilderImpl implements ColumnBuilder {
     };
     return this;
   }
+
+  check(expression: string): this {
+    this.#column.checkExpression = assertValidCheckExpression(expression);
+    return this;
+  }
+}
+
+function assertNonEmptyColumns(columns: string[], kind: string): string[] {
+  const cleaned = columns.map((c) => c.trim()).filter((c) => c.length > 0);
+  if (cleaned.length === 0) {
+    throw new Error(`${kind} requires at least one column`);
+  }
+  return cleaned;
 }
 
 export class TableBuilderImpl implements TableBuilder {
   readonly #columns: ColumnState[] = [];
+  readonly #checks: CheckConstraintState[] = [];
+  #primaryKey: TableKeyConstraintState | null = null;
+  readonly #uniques: TableUniqueConstraintState[] = [];
 
   addColumn(name: string, type: NoBugDbDataType): ColumnBuilder {
     const col = createColumnState(name, type);
@@ -78,8 +103,44 @@ export class TableBuilderImpl implements TableBuilder {
     return this.addColumn(name, 'UUID');
   }
 
+  check(name: string, expression: string): this {
+    this.#checks.push({
+      name: assertValidCheckName(name),
+      expression: assertValidCheckExpression(expression),
+    });
+    return this;
+  }
+
+  primaryKey(...columns: string[]): this {
+    if (this.#primaryKey !== null) {
+      throw new Error('PRIMARY KEY already defined on this table');
+    }
+    this.#primaryKey = { columns: assertNonEmptyColumns(columns, 'PRIMARY KEY') };
+    return this;
+  }
+
+  unique(name: string | null, ...columns: string[]): this {
+    this.#uniques.push({
+      name: name === null || name === '' ? null : assertValidCheckName(name),
+      columns: assertNonEmptyColumns(columns, 'UNIQUE'),
+    });
+    return this;
+  }
+
   getColumns(): ColumnState[] {
     return this.#columns;
+  }
+
+  getChecks(): CheckConstraintState[] {
+    return this.#checks;
+  }
+
+  getPrimaryKey(): TableKeyConstraintState | null {
+    return this.#primaryKey;
+  }
+
+  getUniques(): TableUniqueConstraintState[] {
+    return this.#uniques;
   }
 }
 

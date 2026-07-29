@@ -120,6 +120,6 @@ CREATE TABLE sales_h0 PARTITION OF sales_hash FOR VALUES WITH (MODULUS 4, REMAIN
 
 ## Definition of Done
 
-- [ ] `createPartitionedTable` / `createPartition` в API
-- [ ] Unit + integration тесты
-- [ ] Limitations: no SUBPARTITION / no FK on parent в JSDoc и README фазы
+- [x] `createPartitionedTable` / `createPartition` в API
+- [x] Unit + integration тесты
+- [x] Limitations: no SUBPARTITION / no FK on parent в JSDoc и README фазы

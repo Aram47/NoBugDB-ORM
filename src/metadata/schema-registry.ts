@@ -75,10 +75,19 @@ export class SchemaRegistry {
         `Entity "${entity.name}" relation "${relation.propertyName}" joinColumn "${relation.joinColumnProperty}" does not exist`,
       );
     }
-    if (column.type !== 'UUID') {
+
+    const target = this.#registry.getByTarget(relation.target);
+    if (target.primaryKeys.length !== 1) {
       throw new NoBugDbError(
         'METADATA',
-        `Entity "${entity.name}" relation "${relation.propertyName}" joinColumn must be UUID`,
+        `Entity "${entity.name}" relation "${relation.propertyName}" targets "${target.name}" with a composite primary key (multi-column joinColumn is not supported)`,
+      );
+    }
+    const targetPk = target.columns[target.primaryKeys[0]!]!;
+    if (column.type !== targetPk.type) {
+      throw new NoBugDbError(
+        'METADATA',
+        `Entity "${entity.name}" relation "${relation.propertyName}" joinColumn type ${column.type} must match target PK type ${targetPk.type}`,
       );
     }
   }

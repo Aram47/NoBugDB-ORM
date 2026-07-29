@@ -1,4 +1,11 @@
+import {
+  generateExplainSql,
+  generateVacuumSql,
+  toExplainResult,
+} from '../admin/index.js';
+import type { ExplainResult } from '../admin/index.js';
 import { NoBugDbError } from '../driver/errors.js';
+import type { QueryResult } from '../driver/types.js';
 import { EntityManager } from '../entity-manager/entity-manager.js';
 import { defineEntity } from '../metadata/define-entity.js';
 import { isEntityMetadata } from '../metadata/types.js';
@@ -8,8 +15,10 @@ import type {
 } from '../metadata/types.js';
 import { MetadataRegistry } from '../metadata/metadata-registry.js';
 import { SchemaRegistry } from '../metadata/schema-registry.js';
+import { generateCallSql } from '../migrations/ddl/sql-generator.js';
 import { Pool } from '../pool/pool.js';
 import type { PoolOptions } from '../pool/types.js';
+import type { QueryBuilder } from '../query-builder/query-builder.js';
 import type { Repository } from '../repository/repository.js';
 
 export interface DataSourceOptions extends PoolOptions {
@@ -121,6 +130,46 @@ export class DataSource {
       const txEm = this.#manager!.withExecutor(conn);
       return fn(txEm);
     });
+  }
+
+  /**
+   * Execute `CALL name(args)` and return the wire QueryResult.
+   * Denied for reader role on the server. No OUT/INOUT params.
+   */
+  async callProcedure(
+    name: string,
+    args: unknown[] = [],
+  ): Promise<QueryResult> {
+    this.#assertInitialized();
+    return this.#pool!.query(generateCallSql(name, args));
+  }
+
+  /**
+   * Run `EXPLAIN <statement>` and return raw plan lines.
+   * The statement is **executed** (side effects apply). Reader may EXPLAIN
+   * allowed read statements; writers/DDL still require admin.
+   */
+  async explain(sql: string): Promise<ExplainResult> {
+    this.#assertInitialized();
+    const raw = await this.#pool!.query(generateExplainSql(sql));
+    return toExplainResult(raw);
+  }
+
+  /**
+   * Explain a QueryBuilder's compiled SQL (`EXPLAIN` + `qb.toSql()`).
+   * The underlying statement is executed (side effects apply).
+   */
+  async explainQuery(qb: QueryBuilder): Promise<ExplainResult> {
+    return this.explain(qb.toSql().sql);
+  }
+
+  /**
+   * Run global `VACUUM` (version GC / cleanup). Requires admin role.
+   * Per-table vacuum is not exposed.
+   */
+  async vacuum(): Promise<QueryResult> {
+    this.#assertInitialized();
+    return this.#pool!.query(generateVacuumSql());
   }
 
   #assertInitialized(): void {

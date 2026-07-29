@@ -1,9 +1,14 @@
-import { randomUUID } from 'node:crypto';
 import type { QueryResult } from '../driver/types.js';
 import type { UnitOfWork } from '../entity-manager/unit-of-work.js';
 import type { EntityMapper } from '../metadata/entity-mapper.js';
 import type { MetadataRegistry } from '../metadata/metadata-registry.js';
-import type { EntityMetadata } from '../metadata/types.js';
+import {
+  ensureGeneratedPrimaryKeys,
+  isPrimaryKeyComplete,
+  primaryKeyWhere,
+  serializePrimaryKey,
+} from '../metadata/primary-key.js';
+import type { EntityMetadata, PrimaryKeyValue } from '../metadata/types.js';
 import { QueryBuilder } from '../query-builder/query-builder.js';
 import type { QueryExecutor } from '../query-builder/prepared.js';
 import { sql } from '../query-builder/sql-fragments.js';
@@ -93,9 +98,9 @@ export class Repository<T extends object> {
     return rows[0] ?? null;
   }
 
-  async findById(id: string): Promise<T | null> {
+  async findById(id: PrimaryKeyValue<T>): Promise<T | null> {
     return this.findOne({
-      where: { [this.#meta.primaryKey]: id },
+      where: primaryKeyWhere(id, this.#meta),
     });
   }
 
@@ -154,8 +159,11 @@ export class Repository<T extends object> {
       .executeCommand();
 
     const pk = this.#mapper.getPrimaryKeyValue(criteria, this.#meta);
-    if (pk !== undefined && pk !== null && pk !== '') {
-      this.#unitOfWork.identityMap.delete(this.#meta.tableName, String(pk));
+    if (isPrimaryKeyComplete(pk, this.#meta)) {
+      this.#unitOfWork.identityMap.delete(
+        this.#meta.tableName,
+        serializePrimaryKey(pk, this.#meta),
+      );
     }
 
     return 1;
@@ -204,10 +212,7 @@ export class Repository<T extends object> {
 
   #prepareForInsert(plain: Partial<T>): T {
     const entity = { ...plain } as T;
-    const pk = this.#mapper.getPrimaryKeyValue(entity, this.#meta);
-    if (pk === undefined || pk === null || pk === '') {
-      (entity as Record<string, unknown>)[this.#meta.primaryKey] = randomUUID();
-    }
+    ensureGeneratedPrimaryKeys(entity, this.#meta);
     return entity;
   }
 
@@ -220,8 +225,8 @@ export class Repository<T extends object> {
     }
 
     const pk = this.#mapper.getPrimaryKeyValue(entity, this.#meta);
-    if (pk !== undefined && pk !== null && pk !== '') {
-      const existing = await this.findById(String(pk));
+    if (isPrimaryKeyComplete(pk, this.#meta)) {
+      const existing = await this.findById(pk as PrimaryKeyValue<T>);
       if (existing) {
         const existingRecord = existing as Record<string, unknown>;
         const source = entity as Record<string, unknown>;

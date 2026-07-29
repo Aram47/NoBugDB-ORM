@@ -86,7 +86,7 @@ CURRENT_DATE
 
 ## Definition of Done
 
-- [ ] Все перечисленные builtins доступны через `sql.*`
-- [ ] Unit (+ желательно integration) тесты
-- [ ] Нет дублирования мёртвых helper-ов
-- [ ] Фаза 02 может опираться на эти expressions в `SUM`/`AVG`
+- [x] Все перечисленные builtins доступны через `sql.*`
+- [x] Unit (+ желательно integration) тесты
+- [x] Нет дублирования мёртвых helper-ов
+- [x] Фаза 02 может опираться на эти expressions в `SUM`/`AVG`

@@ -20,9 +20,9 @@
 **VACUUM** (ARCHITECTURE / AST):
 
 - SQL `VACUUM` — version GC / cleanup path alongside commit/rollback vacuum and background worker.
-- Уточнить точный синтаксис по парсеру (`VACUUM` vs `VACUUM table`) на реализации; ORM API держать минимальным.
+- Engine also parses `VACUUM table`, but Phase 9 ORM API exposes **bare `VACUUM` only**.
 
-## Public API (draft)
+## Public API
 
 ```ts
 export interface ExplainResult {
@@ -32,22 +32,17 @@ export interface ExplainResult {
   raw: QueryResult;
 }
 
-export interface VacuumOptions {
-  /** If engine supports per-table vacuum; otherwise ignored / error */
-  table?: string;
-}
-
 export class DataSource {
   explain(sql: string): Promise<ExplainResult>;
   /** Prefer passing QueryBuilder when available */
   explainQuery(qb: QueryBuilder): Promise<ExplainResult>;
 
-  vacuum(options?: VacuumOptions): Promise<QueryResult>;
+  vacuum(): Promise<QueryResult>;
 }
 
 export class EntityManager {
   explain(sql: string): Promise<ExplainResult>;
-  vacuum(options?: VacuumOptions): Promise<QueryResult>;
+  vacuum(): Promise<QueryResult>;
 }
 ```
 
@@ -70,7 +65,7 @@ await ds.vacuum();
 
 1. `explain(sql)`: sql не должен уже начинаться с `EXPLAIN` (или normalize strip) — KISS: если начинается, не дублировать prefix.
 2. Reject empty sql.
-3. `vacuum({ table })`: quoteIdent(table) только если синтаксис движка это подтверждает; иначе не принимать option до подтверждения тестом.
+3. `vacuum()` — bare only; per-table option not exposed in Phase 9.
 
 ## Implementation steps
 
@@ -86,7 +81,7 @@ await ds.vacuum();
 | `explain('SELECT 1')` | QUERY `EXPLAIN SELECT 1` |
 | already prefixed | no double EXPLAIN |
 | `explainQuery(qb)` | EXPLAIN + select SQL |
-| `vacuum()` | `VACUUM` (+ optional table) |
+| `vacuum()` | `VACUUM` |
 | empty sql | ошибка ORM |
 
 ## Risks
@@ -96,6 +91,6 @@ await ds.vacuum();
 
 ## Definition of Done
 
-- [ ] `explain` / `vacuum` на DataSource (и EM)
-- [ ] Unit + integration тесты
-- [ ] JSDoc: EXPLAIN executes the statement; role requirements
+- [x] `explain` / `vacuum` на DataSource (и EM)
+- [x] Unit + integration тесты
+- [x] JSDoc: EXPLAIN executes the statement; role requirements

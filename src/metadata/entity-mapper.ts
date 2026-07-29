@@ -217,7 +217,15 @@ export class EntityMapper {
     entity: Partial<T>,
     meta: EntityMetadata<T>,
   ): unknown {
-    return (entity as Record<string, unknown>)[meta.primaryKey];
+    if (meta.primaryKeys.length === 1) {
+      return (entity as Record<string, unknown>)[meta.primaryKeys[0]!];
+    }
+    const source = entity as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+    for (const prop of meta.primaryKeys) {
+      result[prop] = source[prop];
+    }
+    return result;
   }
 
   getDirtyPatch<T extends object>(
@@ -227,11 +235,12 @@ export class EntityMapper {
   ): Record<string, unknown> {
     const patch: Record<string, unknown> = {};
     const currentSnapshot = this.takeSnapshot(entity, meta);
+    const pkSet = new Set<string>(meta.primaryKeys as string[]);
 
     for (const [propertyName, column] of Object.entries(meta.columns) as Array<
       [string, ColumnMetadata]
     >) {
-      if (propertyName === meta.primaryKey) {
+      if (pkSet.has(propertyName)) {
         continue;
       }
       const current = currentSnapshot[propertyName];

@@ -1,5 +1,9 @@
 import { NoBugDbError } from '../driver/errors.js';
 import type { EntityMapper } from '../metadata/entity-mapper.js';
+import {
+  isPrimaryKeyComplete,
+  serializePrimaryKey,
+} from '../metadata/primary-key.js';
 import type { EntityMetadata } from '../metadata/types.js';
 import type { IdentityMap } from './identity-map.js';
 
@@ -95,14 +99,14 @@ export class UnitOfWork {
    */
   registerManaged<T extends object>(entity: T, meta: EntityMetadata<T>): T {
     const pk = this.#mapper.getPrimaryKeyValue(entity, meta);
-    if (pk === undefined || pk === null || pk === '') {
+    if (!isPrimaryKeyComplete(pk, meta)) {
       throw new NoBugDbError(
         'METADATA',
         `Cannot manage entity "${meta.name}" without a primary key`,
       );
     }
 
-    const pkKey = String(pk);
+    const pkKey = serializePrimaryKey(pk, meta);
     const cached = this.#identityMap.get<T>(meta.tableName, pkKey);
     if (cached) {
       // Keep the identity-map instance; refresh its fields from the new row.
@@ -176,8 +180,12 @@ export class UnitOfWork {
         tracked.meta,
       );
       const pk = this.#mapper.getPrimaryKeyValue(tracked.entity, tracked.meta);
-      if (pk !== undefined && pk !== null && pk !== '') {
-        this.#identityMap.set(tracked.meta.tableName, String(pk), tracked.entity);
+      if (isPrimaryKeyComplete(pk, tracked.meta)) {
+        this.#identityMap.set(
+          tracked.meta.tableName,
+          serializePrimaryKey(pk, tracked.meta),
+          tracked.entity,
+        );
       }
     }
 
@@ -190,8 +198,11 @@ export class UnitOfWork {
 
     for (const tracked of plan.deletes) {
       const pk = this.#mapper.getPrimaryKeyValue(tracked.entity, tracked.meta);
-      if (pk !== undefined && pk !== null && pk !== '') {
-        this.#identityMap.delete(tracked.meta.tableName, String(pk));
+      if (isPrimaryKeyComplete(pk, tracked.meta)) {
+        this.#identityMap.delete(
+          tracked.meta.tableName,
+          serializePrimaryKey(pk, tracked.meta),
+        );
       }
       this.#tracked.delete(tracked.entity);
     }

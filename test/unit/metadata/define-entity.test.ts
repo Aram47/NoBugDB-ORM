@@ -22,8 +22,44 @@ describe('defineEntity', () => {
     expect(User.name).toBe('User');
     expect(User.tableName).toBe('users');
     expect(User.primaryKey).toBe('id');
+    expect(User.primaryKeys).toEqual(['id']);
     expect(User.columns.fullName.columnName).toBe('full_name');
     expect(User.columns.id.primary).toBe(true);
+    expect(User.columns.id.generated).toBe('uuid');
+  });
+
+  it('accepts INT primary key without auto-generate', () => {
+    const Item = defineEntity<{ id: number; name: string }>({
+      name: 'Item',
+      tableName: 'items',
+      columns: {
+        id: { type: 'INT', primary: true },
+        name: { type: 'STRING' },
+      },
+    });
+    expect(Item.primaryKey).toBe('id');
+    expect(Item.columns.id.generated).toBe(false);
+  });
+
+  it('accepts composite primary keys via primaryColumns', () => {
+    const OrderItem = defineEntity<{
+      orderId: string;
+      productId: string;
+      qty: number;
+    }>({
+      name: 'OrderItem',
+      tableName: 'order_items',
+      primaryColumns: ['orderId', 'productId'],
+      columns: {
+        orderId: { type: 'UUID', primary: true },
+        productId: { type: 'UUID', primary: true },
+        qty: { type: 'INT' },
+      },
+    });
+    expect(OrderItem.primaryKeys).toEqual(['orderId', 'productId']);
+    expect(() => OrderItem.primaryKey).toThrowError(
+      expect.objectContaining({ code: 'METADATA' } satisfies Partial<NoBugDbError>),
+    );
   });
 
   it('rejects missing primary key', () => {
@@ -33,35 +69,6 @@ describe('defineEntity', () => {
         tableName: 'nopk',
         columns: {
           id: { type: 'UUID' },
-        },
-      }),
-    ).toThrowError(
-      expect.objectContaining({ code: 'METADATA' } satisfies Partial<NoBugDbError>),
-    );
-  });
-
-  it('rejects non-UUID primary key', () => {
-    expect(() =>
-      defineEntity<{ id: number }>({
-        name: 'IntPk',
-        tableName: 'intpk',
-        columns: {
-          id: { type: 'INT', primary: true },
-        },
-      }),
-    ).toThrowError(
-      expect.objectContaining({ code: 'METADATA' } satisfies Partial<NoBugDbError>),
-    );
-  });
-
-  it('rejects multiple primary keys', () => {
-    expect(() =>
-      defineEntity<{ a: string; b: string }>({
-        name: 'Composite',
-        tableName: 'composite',
-        columns: {
-          a: { type: 'UUID', primary: true },
-          b: { type: 'UUID', primary: true },
         },
       }),
     ).toThrowError(

@@ -43,7 +43,7 @@
 | `CREATE`/`DROP TRIGGER` | `trigger.h` | нет | 07 |
 | FUNCTION / PROCEDURE / `CALL` | `routine_catalog.h` | нет | 08 |
 | `EXPLAIN`, `VACUUM` | AST + tests | нет API | 09 |
-| Composite / non-UUID PK, multi-col UNIQUE | CREATE/ALTER TABLE | только single UUID PK; UNIQUE — одна колонка | 10 |
+| Composite / non-UUID PK, multi-col UNIQUE | CREATE/ALTER TABLE (table-level) | Phase 10 done | 10 |
 
 ### Не планировать (движок не поддерживает)
 

@@ -136,7 +136,7 @@ Size guard на DDL body (~4 KiB).
 
 ## Definition of Done
 
-- [ ] CREATE/DROP FUNCTION|PROCEDURE в migrations
-- [ ] `DataSource.callProcedure` работает
-- [ ] Unit + integration тесты
-- [ ] Limitations OUT/INOUT / nested BEGIN задокументированы
+- [x] CREATE/DROP FUNCTION|PROCEDURE в migrations
+- [x] `DataSource.callProcedure` работает
+- [x] Unit + integration тесты
+- [x] Limitations OUT/INOUT / nested BEGIN задокументированы

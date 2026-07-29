@@ -18,8 +18,15 @@ export type {
   ColumnOptions,
   EntityMetadata,
   EntitySchema,
+  PrimaryKeyValue,
   RelationKind,
   RelationMetadata,
   RelationOnDelete,
   RelationOptions,
 } from './types.js';
+export {
+  assertPrimaryKeysPresent,
+  ensureGeneratedPrimaryKeys,
+  primaryKeyWhere,
+  serializePrimaryKey,
+} from './primary-key.js';

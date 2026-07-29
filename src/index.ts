@@ -31,9 +31,17 @@ export type {
   QueryBuilderOptions,
   QueryExecutor,
   WhereInput,
+  WhereInSubquery,
+  WhereNotInSubquery,
+  WhereExists,
+  WhereNotExists,
+  SubquerySource,
+  OverSpec,
   SqlExpression,
   SqlRaw,
   PreparedRunOptions,
+  SetOperationKind,
+  SetOperationOptions,
 } from './query-builder/index.js';
 
 export {
@@ -52,6 +60,7 @@ export type {
   EntityMetadata,
   EntitySchema,
   EntityMapperOptions,
+  PrimaryKeyValue,
   RelationKind,
   RelationMetadata,
   RelationOnDelete,
@@ -79,6 +88,8 @@ export type { FindOptions, RepositoryContext } from './repository/index.js';
 export { DataSource } from './data-source/index.js';
 export type { DataSourceOptions } from './data-source/index.js';
 
+export type { ExplainResult } from './admin/index.js';
+
 export {
   Migrator,
   createMigrationContext,
@@ -90,13 +101,24 @@ export {
 } from './migrations/index.js';
 export type {
   ColumnBuilder,
+  CreateFunctionOptions,
+  CreateProcedureOptions,
+  CreateTriggerOptions,
   FkOptions,
   FkReferentialAction,
   AlterTableBuilder,
+  FunctionBodyStyle,
+  HashPartitionValues,
   MigrationBuilder,
   MigrationContext,
   MigrationModule,
   MigrationStatusEntry,
   MigratorOptions,
+  PartitionedTableOptions,
+  PartitionStrategy,
+  RangePartitionValues,
+  RoutineParam,
   TableBuilder,
+  TriggerEvent,
+  TriggerTiming,
 } from './migrations/index.js';

@@ -13,13 +13,26 @@ function normalizeColumn(
   propertyName: string,
   options: ColumnOptions,
 ): ColumnMetadata {
+  const primary = options.primary === true;
+  let generated: 'uuid' | false;
+  if (options.generated === false) {
+    generated = false;
+  } else if (options.generated === 'uuid') {
+    generated = 'uuid';
+  } else if (primary && options.type === 'UUID') {
+    generated = 'uuid';
+  } else {
+    generated = false;
+  }
+
   const column: ColumnMetadata = {
     propertyName,
     columnName: options.name ?? propertyName,
     type: options.type,
-    primary: options.primary === true,
+    primary,
     unique: options.unique === true,
     nullable: options.nullable === true,
+    generated,
   };
   if (options.default !== undefined) {
     return { ...column, default: options.default };
@@ -87,12 +100,6 @@ function normalizeRelation(
       `Relation "${propertyName}" on entity "${entityName}" joinColumn "${joinColumnProperty}" does not exist`,
     );
   }
-  if (column.type !== 'UUID') {
-    throw new NoBugDbError(
-      'METADATA',
-      `Relation "${propertyName}" on entity "${entityName}" joinColumn "${joinColumnProperty}" must be UUID`,
-    );
-  }
 
   return {
     ...base,
@@ -129,9 +136,43 @@ function normalizeRelations(
   return normalized;
 }
 
+function resolvePrimaryKeys<T extends object>(
+  schema: EntitySchema<T>,
+  columns: Record<keyof T & string, ColumnMetadata>,
+  flagged: Array<keyof T & string>,
+): Array<keyof T & string> {
+  if (schema.primaryColumns !== undefined && schema.primaryColumns.length > 0) {
+    const ordered: Array<keyof T & string> = [];
+    for (const prop of schema.primaryColumns) {
+      if (!columns[prop]) {
+        throw new NoBugDbError(
+          'METADATA',
+          `Entity "${schema.name}" primaryColumns entry "${String(prop)}" is not a column`,
+        );
+      }
+      ordered.push(prop);
+    }
+    for (const prop of flagged) {
+      if (!ordered.includes(prop)) {
+        throw new NoBugDbError(
+          'METADATA',
+          `Entity "${schema.name}" column "${prop}" is marked primary but missing from primaryColumns`,
+        );
+      }
+    }
+    for (const prop of ordered) {
+      if (!columns[prop]!.primary) {
+        columns[prop] = { ...columns[prop]!, primary: true };
+      }
+    }
+    return ordered;
+  }
+  return flagged;
+}
+
 /**
  * Code-first entity definition (no decorators required).
- * Primary key must be a single UUID column with `primary: true`.
+ * Requires at least one primary column; UUID PKs auto-generate by default.
  */
 export function defineEntity<T extends object>(
   schema: EntitySchema<T>,
@@ -152,7 +193,7 @@ export function defineEntity<T extends object>(
   }
 
   const columns = {} as Record<keyof T & string, ColumnMetadata>;
-  const primaryKeys: Array<keyof T & string> = [];
+  const flaggedPrimary: Array<keyof T & string> = [];
 
   for (const propertyName of propertyNames) {
     const options = schema.columns[propertyName];
@@ -164,24 +205,27 @@ export function defineEntity<T extends object>(
     }
     columns[propertyName] = normalizeColumn(propertyName, options);
     if (options.primary === true) {
-      primaryKeys.push(propertyName);
+      flaggedPrimary.push(propertyName);
     }
   }
 
-  if (primaryKeys.length !== 1) {
+  const primaryKeys = resolvePrimaryKeys(schema, columns, flaggedPrimary);
+
+  if (primaryKeys.length === 0) {
     throw new NoBugDbError(
       'METADATA',
-      `Entity "${schema.name}" must have exactly one primary column (found ${primaryKeys.length})`,
+      `Entity "${schema.name}" must have at least one primary column`,
     );
   }
 
-  const primaryKey = primaryKeys[0]!;
-  const pkColumn = columns[primaryKey]!;
-  if (pkColumn.type !== 'UUID') {
-    throw new NoBugDbError(
-      'METADATA',
-      `Entity "${schema.name}" primary key "${primaryKey}" must be UUID (got ${pkColumn.type})`,
-    );
+  for (const pk of primaryKeys) {
+    const col = columns[pk]!;
+    if (col.generated === 'uuid' && col.type !== 'UUID') {
+      throw new NoBugDbError(
+        'METADATA',
+        `Entity "${schema.name}" primary key "${pk}" has generated: 'uuid' but type is ${col.type}`,
+      );
+    }
   }
 
   const relations = normalizeRelations(
@@ -190,13 +234,27 @@ export function defineEntity<T extends object>(
     columns as Record<string, ColumnMetadata>,
   );
 
-  const meta: EntityMetadata<T> = {
+  const meta = {
     name: schema.name,
     tableName: schema.tableName,
     columns,
-    primaryKey,
+    primaryKeys,
     relations,
-  };
+  } as EntityMetadata<T>;
+
+  Object.defineProperty(meta, 'primaryKey', {
+    enumerable: true,
+    configurable: true,
+    get(): keyof T & string {
+      if (primaryKeys.length !== 1) {
+        throw new NoBugDbError(
+          'METADATA',
+          `Entity "${schema.name}" has a composite primary key; use primaryKeys instead of primaryKey`,
+        );
+      }
+      return primaryKeys[0]!;
+    },
+  });
 
   Object.defineProperty(meta, ENTITY_METADATA, {
     value: true,

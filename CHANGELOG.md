@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 In `0.x`, the API may break between minor versions; breaking changes are listed here.
 
+## [Unreleased]
+
+### Added
+
+- Admin commands: `DataSource.explain` / `explainQuery` / `vacuum` and `EntityManager.explain` / `vacuum` (bare `VACUUM`; EXPLAIN returns raw `QUERY PLAN` lines)
+- Keys and constraints: composite / non-UUID primary keys in `defineEntity` + `Repository.findById`; table-level multi-column `PRIMARY KEY` / `UNIQUE` in migrations (`TableBuilder.primaryKey` / `unique`, ALTER multi-col); UUID PK auto-generate remains default (`generated: 'uuid'`)
+
 ## [0.1.1] - 2026-07-28
 
 First public release of `nobugdb-orm`.
@@ -25,6 +32,7 @@ First public release of `nobugdb-orm`.
 
 ### Known limitations
 
-See [README Limitations](./README.md#limitations). Highlights: ~4 KiB wire buffer, no `SERIAL`/`RETURNING`, no `LIKE`/`UNION`, UUID primary keys, no runtime introspection, no TLS on the wire.
+See [README Limitations](./README.md#limitations). Highlights: ~4 KiB wire buffer, no `SERIAL`/`RETURNING`, no `LIKE`/CTE/`UPSERT`, client-supplied non-UUID/composite PKs (UUID auto-generate by default), no runtime introspection, no TLS on the wire.
 
 [0.1.0]: https://github.com/Aram47/NoBugDB-ORM/releases/tag/v0.1.0
+[0.1.1]: https://github.com/Aram47/NoBugDB-ORM/releases/tag/v0.1.1

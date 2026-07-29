@@ -11,13 +11,9 @@ const UNQUOTED_IDENT_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const UNSUPPORTED_KEYWORDS = [
   'LIKE',
   'ILIKE',
-  'UNION',
-  'INTERSECT',
-  'EXCEPT',
   'RETURNING',
   'ON CONFLICT',
   'WITH',
-  'OVER',
 ] as const;
 
 export function assertValidIdentifier(name: string): void {

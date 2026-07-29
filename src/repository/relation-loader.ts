@@ -97,7 +97,7 @@ export class RelationLoader {
     for (const spec of joins) {
       const joinColumnDb = spec.relation.joinColumnDb!;
       const targetPkDb =
-        spec.meta.columns[spec.meta.primaryKey]!.columnName;
+        spec.meta.columns[spec.meta.primaryKeys[0]!]!.columnName;
       const onClause = `${spec.ownerAlias}.${joinColumnDb} = ${spec.alias}.${targetPkDb}`;
       qb = qb.leftJoin(spec.meta.tableName, onClause, spec.alias);
     }

@@ -7,6 +7,11 @@ export interface ColumnOptions {
   unique?: boolean;
   nullable?: boolean;
   default?: unknown;
+  /**
+   * UUID primary columns default to `'uuid'` (auto-generate on insert).
+   * Set `false` to require a client-supplied value. Non-UUID PKs never auto-generate.
+   */
+  generated?: 'uuid' | false;
 }
 
 export interface ColumnMetadata {
@@ -17,6 +22,7 @@ export interface ColumnMetadata {
   readonly unique: boolean;
   readonly nullable: boolean;
   readonly default?: unknown;
+  readonly generated: 'uuid' | false;
 }
 
 export type RelationKind = 'many-to-one' | 'one-to-many' | 'one-to-one';
@@ -47,7 +53,15 @@ export interface EntitySchema<T> {
   tableName: string;
   columns: Record<keyof T & string, ColumnOptions>;
   relations?: Record<string, RelationOptions>;
+  /** Explicit composite PK order; optional when a single column has `primary: true`. */
+  primaryColumns?: Array<keyof T & string>;
 }
+
+/** Scalar or composite primary key value accepted by Repository.findById. */
+export type PrimaryKeyValue<T = unknown> =
+  | string
+  | number
+  | (T extends object ? Partial<T> & Record<string, unknown> : Record<string, unknown>);
 
 /** @public Entity shape is provided by the caller; default is intentionally open. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,6 +69,12 @@ export interface EntityMetadata<T = any> {
   readonly name: string;
   readonly tableName: string;
   readonly columns: Readonly<Record<keyof T & string, ColumnMetadata>>;
+  /** Ordered primary key property names (length >= 1). */
+  readonly primaryKeys: ReadonlyArray<keyof T & string>;
+  /**
+   * Single-column PK shortcut. Throws when the entity has a composite primary key.
+   * Prefer `primaryKeys` for new code.
+   */
   readonly primaryKey: keyof T & string;
   readonly relations: Readonly<Record<string, RelationMetadata>>;
 }

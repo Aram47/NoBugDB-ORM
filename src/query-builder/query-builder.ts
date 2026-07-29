@@ -23,6 +23,7 @@ import {
   type SqlExpression,
   type SqlRaw,
 } from './sql-fragments.js';
+import type { SubquerySource } from './subquery.js';
 import {
   compileWhere,
   mergeWhere,
@@ -30,11 +31,19 @@ import {
 } from './where.js';
 
 export type { WhereInput } from './where.js';
+export type { SubquerySource } from './subquery.js';
 export type { QueryExecutor } from './prepared.js';
 
 type QueryKind = 'select' | 'insert' | 'update' | 'delete';
 type JoinType = 'INNER' | 'LEFT' | 'RIGHT' | 'FULL' | 'CROSS';
 type SortDirection = 'ASC' | 'DESC';
+
+export type SetOperationKind = 'union' | 'intersect' | 'except';
+
+export interface SetOperationOptions {
+  /** Only valid for UNION. Default false. */
+  all?: boolean;
+}
 
 interface JoinClause {
   type: JoinType;
@@ -46,6 +55,17 @@ interface JoinClause {
 interface OrderClause {
   column: string;
   dir: SortDirection;
+}
+
+interface SetOperationStep {
+  kind: SetOperationKind;
+  all?: boolean;
+  right: QueryBuilderState;
+}
+
+interface SetOperationNode {
+  left: QueryBuilderState;
+  steps: SetOperationStep[];
 }
 
 interface QueryBuilderState {
@@ -66,6 +86,8 @@ interface QueryBuilderState {
   updateTable?: string;
   updateSet?: Record<string, unknown>;
   deleteTable?: string;
+  /** Top-level set-op tree; when set, leaf SELECT fields on this state are unused. */
+  setOperation?: SetOperationNode;
 }
 
 export interface QueryBuilderOptions {
@@ -84,8 +106,13 @@ interface NormalizedQueryBuilderOptions {
  * Fluent SQL builder for the NoBugDB dialect subset.
  *
  * Supports `SELECT` / `INSERT` / `UPDATE` / `DELETE` with JOIN, WHERE,
- * GROUP BY, HAVING, ORDER BY, LIMIT/OFFSET, and basic aggregates.
- * Rejects unsupported constructs (`LIKE`, `UNION`, CTE, window functions, etc.).
+ * GROUP BY, HAVING, ORDER BY, LIMIT/OFFSET, basic aggregates, window helpers
+ * (`ROW_NUMBER` / `RANK` / `DENSE_RANK` / running `SUM`·`AVG` via `sql.*.over()`),
+ * top-level set operations (`UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT`),
+ * and subqueries (`IN` / `EXISTS` / scalar via {@link QueryBuilder.toSubquerySql}
+ * and `sql.subquery`). Set operations are not allowed inside subqueries.
+ * Rejects unsupported constructs (`LIKE`, CTE, etc.).
+ * Does not generate `INTERSECT ALL` / `EXCEPT ALL` (not supported by the engine).
  *
  * {@link QueryBuilder.toSql} renders escaped literals; {@link QueryBuilder.execute}
  * / {@link QueryBuilder.executeCommand} use `PREPARE` / `EXECUTE` / `DEALLOCATE`.
@@ -123,6 +150,10 @@ export class QueryBuilder {
       groupBy: patch.groupBy ?? [...this.#state.groupBy],
       orderBy: patch.orderBy ?? [...this.#state.orderBy],
       insertRows: patch.insertRows ?? [...this.#state.insertRows],
+      setOperation:
+        patch.setOperation !== undefined
+          ? patch.setOperation
+          : this.#state.setOperation,
     });
   }
 
@@ -237,6 +268,22 @@ export class QueryBuilder {
     return this.#withWhere(clause, 'or');
   }
 
+  whereInSubquery(column: string, sub: SubquerySource): this {
+    return this.#withWhere({ col: column, inSubquery: sub }, 'and');
+  }
+
+  whereNotInSubquery(column: string, sub: SubquerySource): this {
+    return this.#withWhere({ col: column, notInSubquery: sub }, 'and');
+  }
+
+  whereExists(sub: SubquerySource): this {
+    return this.#withWhere({ exists: sub }, 'and');
+  }
+
+  whereNotExists(sub: SubquerySource): this {
+    return this.#withWhere({ notExists: sub }, 'and');
+  }
+
   #withWhere(
     clause: WhereInput,
     mode: 'replace' | 'and' | 'or',
@@ -291,6 +338,122 @@ export class QueryBuilder {
     return this.#clone({ offset: n }) as this;
   }
 
+  /**
+   * Combine this SELECT with `other` via `UNION` / `UNION ALL`.
+   * Set operations are top-level only (engine constraint).
+   */
+  union(other: QueryBuilder, options?: SetOperationOptions): this {
+    return this.#setOperation('union', other, options);
+  }
+
+  /**
+   * Combine this SELECT with `other` via `INTERSECT` (no `ALL`).
+   */
+  intersect(other: QueryBuilder): this {
+    return this.#setOperation('intersect', other);
+  }
+
+  /**
+   * Combine this SELECT with `other` via `EXCEPT` (no `ALL`).
+   */
+  except(other: QueryBuilder): this {
+    return this.#setOperation('except', other);
+  }
+
+  #setOperation(
+    kind: SetOperationKind,
+    other: QueryBuilder,
+    options?: SetOperationOptions,
+  ): this {
+    this.#assertSelectOperand(this, 'left');
+    this.#assertSelectOperand(other, 'right');
+
+    if (options?.all === true && kind !== 'union') {
+      throw new NoBugDbError(
+        'UNSUPPORTED_SQL',
+        `${kind.toUpperCase()} ALL is not supported by NoBugDB`,
+      );
+    }
+
+    const step: SetOperationStep = { kind, right: cloneState(other.#state) };
+    if (kind === 'union' && options?.all === true) {
+      step.all = true;
+    }
+
+    const canFlatten =
+      this.#state.setOperation !== undefined &&
+      this.#state.orderBy.length === 0 &&
+      this.#state.limit === undefined &&
+      this.#state.offset === undefined;
+
+    if (canFlatten) {
+      const current = this.#state.setOperation!;
+      return this.#clone({
+        setOperation: {
+          left: current.left,
+          steps: [...current.steps, step],
+        },
+        orderBy: [],
+        limit: undefined,
+        offset: undefined,
+      }) as this;
+    }
+
+    return this.#clone({
+      selectColumns: [],
+      distinct: false,
+      fromTable: undefined,
+      fromAlias: undefined,
+      joins: [],
+      where: undefined,
+      groupBy: [],
+      having: undefined,
+      setOperation: {
+        left: cloneState(this.#state),
+        steps: [step],
+      },
+      orderBy: [],
+      limit: undefined,
+      offset: undefined,
+    }) as this;
+  }
+
+  #assertSelectOperand(builder: QueryBuilder, side: 'left' | 'right'): void {
+    if (builder.#state.kind !== 'select') {
+      throw new NoBugDbError(
+        'UNSUPPORTED_SQL',
+        `Set operation ${side} operand must be a SELECT`,
+      );
+    }
+    if (!builder.#state.fromTable && builder.#state.setOperation === undefined) {
+      throw new NoBugDbError(
+        'UNSUPPORTED_SQL',
+        `Set operation ${side} operand SELECT requires FROM`,
+      );
+    }
+  }
+
+  #assertSubqueryOperand(builder: QueryBuilder): void {
+    if (builder.#state.kind !== 'select') {
+      throw new NoBugDbError(
+        'UNSUPPORTED_SQL',
+        'Subquery must be a SELECT',
+      );
+    }
+    if (builder.#state.setOperation !== undefined) {
+      throw new NoBugDbError(
+        'UNSUPPORTED_SQL',
+        'Set operations are not supported inside subqueries',
+      );
+    }
+    if (!builder.#state.fromTable) {
+      throw new NoBugDbError(
+        'UNSUPPORTED_SQL',
+        'Subquery SELECT requires FROM',
+      );
+    }
+  }
+
   insertInto(table: string): this {
     this.#setKind('insert');
     assertValidIdentifier(table);
@@ -332,6 +495,19 @@ export class QueryBuilder {
     const { sql } = this.#compileSql({ usePlaceholders: false });
     this.#assertRequestSize(sql);
     return { sql };
+  }
+
+  /**
+   * Parenthesized SELECT fragment for use as a subquery (no execute).
+   * Inner must be a plain SELECT — set operations are rejected.
+   * Compiles with escaped literals (no PREPARE placeholders).
+   */
+  toSubquerySql(): string {
+    this.#assertSubqueryOperand(this);
+    const { sql } = this.#compilePlainSelect(this.#state, {
+      usePlaceholders: false,
+    });
+    return `(${sql})`;
   }
 
   async execute<T = Record<string, unknown>>(): Promise<T[]> {
@@ -417,16 +593,74 @@ export class QueryBuilder {
     params: unknown[];
     paramTypes: (NoBugDbDataType | undefined)[];
   } {
-    if (!this.#state.fromTable) {
+    if (this.#state.setOperation !== undefined) {
+      return this.#compileSelectWithSetOperation(this.#state, options);
+    }
+    return this.#compilePlainSelect(this.#state, options);
+  }
+
+  #compileSelectWithSetOperation(
+    state: QueryBuilderState,
+    options: { usePlaceholders: boolean },
+  ): {
+    sql: string;
+    params: unknown[];
+    paramTypes: (NoBugDbDataType | undefined)[];
+  } {
+    const setOp = state.setOperation!;
+    let acc = this.#compileSelectState(setOp.left, options);
+    let sql = acc.sql;
+    const params = [...acc.params];
+    const paramTypes = [...acc.paramTypes];
+
+    for (const step of setOp.steps) {
+      const right = this.#compileSelectState(step.right, options);
+      const rightSql = renumberPlaceholders(right.sql, params.length);
+      const opKeyword = setOperationKeyword(step);
+      sql = `(${sql}) ${opKeyword} (${rightSql})`;
+      params.push(...right.params);
+      paramTypes.push(...right.paramTypes);
+    }
+
+    const parts = [sql];
+    appendOrderLimitOffset(parts, state);
+    const finalSql = parts.join(' ');
+    assertSupportedSqlFragment(finalSql);
+    return { sql: finalSql, params, paramTypes };
+  }
+
+  #compileSelectState(
+    state: QueryBuilderState,
+    options: { usePlaceholders: boolean },
+  ): {
+    sql: string;
+    params: unknown[];
+    paramTypes: (NoBugDbDataType | undefined)[];
+  } {
+    if (state.setOperation !== undefined) {
+      return this.#compileSelectWithSetOperation(state, options);
+    }
+    return this.#compilePlainSelect(state, options);
+  }
+
+  #compilePlainSelect(
+    state: QueryBuilderState,
+    options: { usePlaceholders: boolean },
+  ): {
+    sql: string;
+    params: unknown[];
+    paramTypes: (NoBugDbDataType | undefined)[];
+  } {
+    if (!state.fromTable) {
       throw new NoBugDbError('UNSUPPORTED_SQL', 'SELECT requires FROM');
     }
 
     const params: unknown[] = [];
     const paramTypes: (NoBugDbDataType | undefined)[] = [];
     const columns =
-      this.#state.selectColumns.length === 0
+      state.selectColumns.length === 0
         ? '*'
-        : this.#state.selectColumns
+        : state.selectColumns
             .map((col) => {
               if (typeof col === 'string') {
                 return col === '*' ? '*' : quoteQualifiedIdent(col);
@@ -436,47 +670,35 @@ export class QueryBuilder {
             .join(', ');
 
     const parts = [
-      `SELECT${this.#state.distinct ? ' DISTINCT' : ''} ${columns}`,
-      `FROM ${quoteIdent(this.#state.fromTable)}${this.#state.fromAlias ? ` ${quoteIdent(this.#state.fromAlias)}` : ''}`,
+      `SELECT${state.distinct ? ' DISTINCT' : ''} ${columns}`,
+      `FROM ${quoteIdent(state.fromTable)}${state.fromAlias ? ` ${quoteIdent(state.fromAlias)}` : ''}`,
     ];
 
-    for (const join of this.#state.joins) {
+    for (const join of state.joins) {
       parts.push(this.#compileJoin(join));
     }
 
-    if (this.#state.where !== undefined) {
-      const where = compileWhere(this.#state.where, this.#whereCompileOptions(options.usePlaceholders));
+    if (state.where !== undefined) {
+      const where = compileWhere(state.where, this.#whereCompileOptions(options.usePlaceholders));
       params.push(...where.params);
       paramTypes.push(...where.paramTypes);
       parts.push(`WHERE ${where.sql}`);
     }
 
-    if (this.#state.groupBy.length > 0) {
+    if (state.groupBy.length > 0) {
       parts.push(
-        `GROUP BY ${this.#state.groupBy.map((col) => quoteQualifiedIdent(col)).join(', ')}`,
+        `GROUP BY ${state.groupBy.map((col) => quoteQualifiedIdent(col)).join(', ')}`,
       );
     }
 
-    if (this.#state.having !== undefined) {
-      const having = compileWhere(this.#state.having, this.#whereCompileOptions(options.usePlaceholders));
+    if (state.having !== undefined) {
+      const having = compileWhere(state.having, this.#whereCompileOptions(options.usePlaceholders));
       params.push(...having.params);
       paramTypes.push(...having.paramTypes);
       parts.push(`HAVING ${having.sql}`);
     }
 
-    if (this.#state.orderBy.length > 0) {
-      const order = this.#state.orderBy
-        .map(({ column, dir }) => `${quoteQualifiedIdent(column)} ${dir}`)
-        .join(', ');
-      parts.push(`ORDER BY ${order}`);
-    }
-
-    if (this.#state.limit !== undefined) {
-      parts.push(`LIMIT ${this.#state.limit}`);
-    }
-    if (this.#state.offset !== undefined) {
-      parts.push(`OFFSET ${this.#state.offset}`);
-    }
+    appendOrderLimitOffset(parts, state);
 
     const sql = parts.join(' ');
     assertSupportedSqlFragment(sql);
@@ -749,4 +971,64 @@ function createEmptyState(): QueryBuilderState {
     orderBy: [],
     insertRows: [],
   };
+}
+
+function cloneState(state: QueryBuilderState): QueryBuilderState {
+  return {
+    ...state,
+    selectColumns: [...state.selectColumns],
+    joins: state.joins.map((join) => ({ ...join })),
+    groupBy: [...state.groupBy],
+    orderBy: [...state.orderBy],
+    insertRows: [...state.insertRows],
+    ...(state.setOperation !== undefined
+      ? {
+          setOperation: {
+            left: cloneState(state.setOperation.left),
+            steps: state.setOperation.steps.map((step) => ({
+              kind: step.kind,
+              ...(step.all !== undefined ? { all: step.all } : {}),
+              right: cloneState(step.right),
+            })),
+          },
+        }
+      : {}),
+  };
+}
+
+function appendOrderLimitOffset(
+  parts: string[],
+  state: QueryBuilderState,
+): void {
+  if (state.orderBy.length > 0) {
+    const order = state.orderBy
+      .map(({ column, dir }) => `${quoteQualifiedIdent(column)} ${dir}`)
+      .join(', ');
+    parts.push(`ORDER BY ${order}`);
+  }
+  if (state.limit !== undefined) {
+    parts.push(`LIMIT ${state.limit}`);
+  }
+  if (state.offset !== undefined) {
+    parts.push(`OFFSET ${state.offset}`);
+  }
+}
+
+function setOperationKeyword(step: SetOperationStep): string {
+  if (step.kind === 'union') {
+    return step.all === true ? 'UNION ALL' : 'UNION';
+  }
+  if (step.kind === 'intersect') {
+    return 'INTERSECT';
+  }
+  return 'EXCEPT';
+}
+
+function renumberPlaceholders(sql: string, offset: number): string {
+  if (offset === 0) {
+    return sql;
+  }
+  return sql.replace(/\$(\d+)/g, (_match, digits: string) => {
+    return `$${Number(digits) + offset}`;
+  });
 }

@@ -1,9 +1,15 @@
 import type { NoBugDbDataType } from '../../types/type-mapper.js';
 import type { AlterTableBuilder, ColumnBuilder } from '../types.js';
 import {
+  assertValidCheckExpression,
+  assertValidCheckName,
+} from './check-constraint.js';
+import {
+  generateAddCheckSql,
   generateAddColumnSql,
   generateAddPrimaryKeySql,
   generateAddUniqueSql,
+  generateDropCheckSql,
   generateDropColumnSql,
   generateDropNotNullSql,
   generateDropPrimaryKeySql,
@@ -44,20 +50,20 @@ export class AlterTableBuilderImpl implements AlterTableBuilder {
     this.#statements.push(generateRenameTableSql(this.#tableName, to));
   }
 
-  addPrimaryKey(column: string): void {
-    this.#statements.push(generateAddPrimaryKeySql(this.#tableName, column));
+  addPrimaryKey(...columns: string[]): void {
+    this.#statements.push(generateAddPrimaryKeySql(this.#tableName, ...columns));
   }
 
   dropPrimaryKey(): void {
     this.#statements.push(generateDropPrimaryKeySql(this.#tableName));
   }
 
-  addUnique(column: string): void {
-    this.#statements.push(generateAddUniqueSql(this.#tableName, column));
+  addUnique(...columns: string[]): void {
+    this.#statements.push(generateAddUniqueSql(this.#tableName, ...columns));
   }
 
-  dropUnique(column: string): void {
-    this.#statements.push(generateDropUniqueSql(this.#tableName, column));
+  dropUnique(...columns: string[]): void {
+    this.#statements.push(generateDropUniqueSql(this.#tableName, ...columns));
   }
 
   setNotNull(column: string): void {
@@ -66,6 +72,17 @@ export class AlterTableBuilderImpl implements AlterTableBuilder {
 
   dropNotNull(column: string): void {
     this.#statements.push(generateDropNotNullSql(this.#tableName, column));
+  }
+
+  addCheck(name: string, expression: string): void {
+    const validName = assertValidCheckName(name);
+    const validExpr = assertValidCheckExpression(expression);
+    this.#statements.push(generateAddCheckSql(this.#tableName, validName, validExpr));
+  }
+
+  dropCheck(name: string): void {
+    const validName = assertValidCheckName(name);
+    this.#statements.push(generateDropCheckSql(this.#tableName, validName));
   }
 
   getStatements(): string[] {

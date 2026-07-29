@@ -10,6 +10,10 @@ import {
   escapeLiteral,
   quoteQualifiedIdent,
 } from './escape.js';
+import { isSqlExpression } from './sql-fragments.js';
+import type { SubquerySource } from './subquery.js';
+
+export type { SubquerySource } from './subquery.js';
 
 export type WhereComparisonOp =
   | '='
@@ -41,11 +45,33 @@ export interface WhereNot {
   not: WhereInput;
 }
 
+export interface WhereInSubquery {
+  col: string;
+  inSubquery: SubquerySource;
+}
+
+export interface WhereNotInSubquery {
+  col: string;
+  notInSubquery: SubquerySource;
+}
+
+export interface WhereExists {
+  exists: SubquerySource;
+}
+
+export interface WhereNotExists {
+  notExists: SubquerySource;
+}
+
 export type WhereInput =
   | WhereCondition
   | WhereAnd
   | WhereOr
   | WhereNot
+  | WhereInSubquery
+  | WhereNotInSubquery
+  | WhereExists
+  | WhereNotExists
   | Record<string, unknown>;
 
 export interface CompiledWhere {
@@ -81,6 +107,32 @@ function isWhereNot(input: WhereInput): input is WhereNot {
   return typeof input === 'object' && input !== null && 'not' in input;
 }
 
+function isWhereInSubquery(input: WhereInput): input is WhereInSubquery {
+  return (
+    typeof input === 'object' &&
+    input !== null &&
+    'col' in input &&
+    'inSubquery' in input
+  );
+}
+
+function isWhereNotInSubquery(input: WhereInput): input is WhereNotInSubquery {
+  return (
+    typeof input === 'object' &&
+    input !== null &&
+    'col' in input &&
+    'notInSubquery' in input
+  );
+}
+
+function isWhereExists(input: WhereInput): input is WhereExists {
+  return typeof input === 'object' && input !== null && 'exists' in input;
+}
+
+function isWhereNotExists(input: WhereInput): input is WhereNotExists {
+  return typeof input === 'object' && input !== null && 'notExists' in input;
+}
+
 function isRecordWhere(
   input: WhereInput,
 ): input is Record<string, unknown> {
@@ -90,7 +142,11 @@ function isRecordWhere(
     !isWhereCondition(input) &&
     !isWhereAnd(input) &&
     !isWhereOr(input) &&
-    !isWhereNot(input)
+    !isWhereNot(input) &&
+    !isWhereInSubquery(input) &&
+    !isWhereNotInSubquery(input) &&
+    !isWhereExists(input) &&
+    !isWhereNotExists(input)
   );
 }
 
@@ -110,6 +166,10 @@ function renderValue(
   params: unknown[],
   paramTypes: (NoBugDbDataType | undefined)[],
 ): string {
+  if (isSqlExpression(value)) {
+    return value.text;
+  }
+
   const mapper = options.mapper ?? defaultTypeMapper;
   const type = options.columnTypes?.[col];
 
@@ -199,6 +259,22 @@ function compileWhereInput(
 
   if (isWhereNot(input)) {
     return `NOT (${compileWhereInput(input.not, options, params, paramTypes)})`;
+  }
+
+  if (isWhereExists(input)) {
+    return `EXISTS ${input.exists.toSubquerySql()}`;
+  }
+
+  if (isWhereNotExists(input)) {
+    return `NOT EXISTS ${input.notExists.toSubquerySql()}`;
+  }
+
+  if (isWhereInSubquery(input)) {
+    return `${quoteQualifiedIdent(input.col)} IN ${input.inSubquery.toSubquerySql()}`;
+  }
+
+  if (isWhereNotInSubquery(input)) {
+    return `${quoteQualifiedIdent(input.col)} NOT IN ${input.notInSubquery.toSubquerySql()}`;
   }
 
   if (isRecordWhere(input)) {
