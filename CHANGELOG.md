@@ -9,6 +9,16 @@ In `0.x`, the API may break between minor versions; breaking changes are listed 
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-29
+
+### Fixed
+
+- PREPARE UPDATE: continuous `$n` placeholders across SET + WHERE (`renumberPlaceholders`)
+- Migrator creates history table when the driver throws missing-table `SERVER_ERROR` (fixes CLI `migration:up` on fresh DB)
+- Inverse one-to-one relations without a local `joinColumn` (mappedBy / `inverseSide`)
+- Default max request size raised to **1 MiB** (aligned with NoBugDB server read buffer)
+- Wire protocol decode: SQL NULL as `\N` → `null`; empty STRING rows preserved
+
 ## [0.1.2] - 2026-07-29
 
 ### Added
@@ -27,7 +37,7 @@ In `0.x`, the API may break between minor versions; breaking changes are listed 
 
 ### Known limitations
 
-See [README Limitations](./README.md#limitations). Highlights: ~4 KiB wire buffer, no `SERIAL`/`RETURNING`, no `LIKE`/CTE/`UPSERT`, client-supplied non-UUID/composite PKs (UUID auto-generate by default), no runtime introspection, no TLS on the wire.
+See [README Limitations](./README.md#limitations). Highlights: 1 MiB wire buffer, no `SERIAL`/`RETURNING`, no `LIKE`/CTE/`UPSERT`, client-supplied non-UUID/composite PKs (UUID auto-generate by default), no runtime introspection, no TLS on the wire.
 
 ## [0.1.1] - 2026-07-28
 
@@ -47,8 +57,9 @@ First public release of `nobugdb-orm`.
 
 ### Known limitations
 
-See [README Limitations](./README.md#limitations). Highlights: ~4 KiB wire buffer, no `SERIAL`/`RETURNING`, no `LIKE`/CTE/`UPSERT`, client-supplied non-UUID/composite PKs (UUID auto-generate by default), no runtime introspection, no TLS on the wire.
+See [README Limitations](./README.md#limitations). Highlights: 1 MiB wire buffer, no `SERIAL`/`RETURNING`, no `LIKE`/CTE/`UPSERT`, client-supplied non-UUID/composite PKs (UUID auto-generate by default), no runtime introspection, no TLS on the wire.
 
 [0.1.0]: https://github.com/Aram47/NoBugDB-ORM/releases/tag/v0.1.0
 [0.1.1]: https://github.com/Aram47/NoBugDB-ORM/releases/tag/v0.1.1
 [0.1.2]: https://github.com/Aram47/NoBugDB-ORM/releases/tag/v0.1.2
+[0.1.3]: https://github.com/Aram47/NoBugDB-ORM/releases/tag/v0.1.3

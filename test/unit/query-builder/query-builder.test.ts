@@ -329,6 +329,51 @@ describe('QueryBuilder', () => {
     );
   });
 
+  it('numbers UPDATE SET+WHERE placeholders continuously for PREPARE', async () => {
+    const prepares: string[] = [];
+    const executes: string[] = [];
+    const executor = mockExecutor((sqlText) => {
+      if (sqlText.startsWith('PREPARE')) {
+        prepares.push(sqlText);
+      }
+      if (sqlText.startsWith('EXECUTE')) {
+        executes.push(sqlText);
+      }
+    });
+
+    await new QueryBuilder(executor)
+      .update('users')
+      .set({ name: 'Ada', active: true })
+      .where({ id: 7 })
+      .executeCommand();
+
+    expect(prepares).toHaveLength(1);
+    expect(prepares[0]).toContain(
+      'UPDATE users SET name = $1, active = $2 WHERE id = $3',
+    );
+    expect(executes).toHaveLength(1);
+    expect(executes[0]).toMatch(
+      /^EXECUTE orm_[a-f0-9]+\('Ada', TRUE, 7\)$/,
+    );
+  });
+
+  it('numbers DELETE WHERE placeholders starting at $1', async () => {
+    const prepares: string[] = [];
+    const executor = mockExecutor((sqlText) => {
+      if (sqlText.startsWith('PREPARE')) {
+        prepares.push(sqlText);
+      }
+    });
+
+    await new QueryBuilder(executor)
+      .deleteFrom('users')
+      .where({ id: 1 })
+      .executeCommand();
+
+    expect(prepares).toHaveLength(1);
+    expect(prepares[0]).toContain('DELETE FROM users WHERE id = $1');
+  });
+
   it('builds whereInSubquery', () => {
     const exec = mockExecutor();
     const sub = new QueryBuilder(exec).select('user_id').from('orders');

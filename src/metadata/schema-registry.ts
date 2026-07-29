@@ -51,6 +51,11 @@ export class SchemaRegistry {
       return;
     }
 
+    if (relation.type === 'one-to-one' && !relation.joinColumnProperty) {
+      this.#assertInverseOneToOne(entity, relation, target);
+      return;
+    }
+
     this.#assertOwningSide(entity, relation);
     if (relation.inverseSide !== undefined) {
       this.#assertInverseSide(entity, relation, target);
@@ -116,6 +121,48 @@ export class SchemaRegistry {
       throw new NoBugDbError(
         'METADATA',
         `Entity "${entity.name}" relation "${relation.propertyName}" inverseSide "${relation.inverseSide}" on "${target.name}" must be many-to-one or one-to-one`,
+      );
+    }
+
+    if (inverse.target !== entity.name) {
+      throw new NoBugDbError(
+        'METADATA',
+        `Entity "${entity.name}" relation "${relation.propertyName}" inverseSide "${relation.inverseSide}" on "${target.name}" must target "${entity.name}"`,
+      );
+    }
+  }
+
+  #assertInverseOneToOne(
+    entity: EntityMetadata,
+    relation: RelationMetadata,
+    target: EntityMetadata,
+  ): void {
+    if (!relation.inverseSide || relation.inverseSide.trim() === '') {
+      throw new NoBugDbError(
+        'METADATA',
+        `Entity "${entity.name}" relation "${relation.propertyName}" (inverse one-to-one) requires inverseSide`,
+      );
+    }
+
+    const inverse = target.relations[relation.inverseSide];
+    if (!inverse) {
+      throw new NoBugDbError(
+        'METADATA',
+        `Entity "${entity.name}" relation "${relation.propertyName}" inverseSide "${relation.inverseSide}" does not exist on "${target.name}"`,
+      );
+    }
+
+    if (inverse.type !== 'one-to-one') {
+      throw new NoBugDbError(
+        'METADATA',
+        `Entity "${entity.name}" relation "${relation.propertyName}" inverseSide "${relation.inverseSide}" on "${target.name}" must be one-to-one`,
+      );
+    }
+
+    if (!inverse.joinColumnProperty || !inverse.joinColumnDb) {
+      throw new NoBugDbError(
+        'METADATA',
+        `Entity "${entity.name}" relation "${relation.propertyName}" inverseSide "${relation.inverseSide}" on "${target.name}" must be the owning side with joinColumn`,
       );
     }
 

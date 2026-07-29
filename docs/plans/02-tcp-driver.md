@@ -86,7 +86,7 @@ export class Client {
 
 2. **Validate request size**
    - Перед `socket.write` проверить `Buffer.byteLength(message) <= maxRequestBytes`
-   - Default `maxRequestBytes = 4096` (серверный `Connection::read_message` buffer)
+   - Default `maxRequestBytes = 1 MiB` (серверный `Connection::read_message` buffer)
    - Бросать `NoBugDbError` с code `REQUEST_TOO_LARGE`
 
 3. **`Connection`**

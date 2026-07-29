@@ -91,6 +91,16 @@ function normalizeRelation(
     return base;
   }
 
+  // Inverse one-to-one: mappedBy owning side via inverseSide, no local FK.
+  if (
+    options.type === 'one-to-one' &&
+    options.joinColumn === undefined &&
+    options.inverseSide !== undefined &&
+    options.inverseSide.trim() !== ''
+  ) {
+    return base;
+  }
+
   const joinColumnProperty =
     options.joinColumn ?? `${propertyName}Id`;
   const column = columns[joinColumnProperty];

@@ -8,7 +8,7 @@ import type { ExplainResult } from './types.js';
 const EXPLAIN_PREFIX = /^EXPLAIN\b/i;
 
 /**
- * Fail-fast if the encoded QUERY frame would exceed the ~4 KiB wire buffer.
+ * Fail-fast if the encoded QUERY frame would exceed the wire buffer (default 1 MiB).
  */
 export function assertAdminSqlFitsWire(
   sql: string,

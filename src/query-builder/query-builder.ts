@@ -116,7 +116,7 @@ interface NormalizedQueryBuilderOptions {
  *
  * {@link QueryBuilder.toSql} renders escaped literals; {@link QueryBuilder.execute}
  * / {@link QueryBuilder.executeCommand} use `PREPARE` / `EXECUTE` / `DEALLOCATE`.
- * Payloads must fit the ~4 KiB server request buffer (`maxRequestBytes`).
+ * Payloads must fit the server request buffer (`maxRequestBytes`, default 1 MiB).
  */
 export class QueryBuilder {
   readonly #executor: QueryExecutor;
@@ -748,10 +748,16 @@ export class QueryBuilder {
     ];
 
     if (this.#state.where !== undefined) {
-      const where = compileWhere(this.#state.where, this.#whereCompileOptions(options.usePlaceholders));
+      const setParamCount = params.length;
+      const where = compileWhere(
+        this.#state.where,
+        this.#whereCompileOptions(options.usePlaceholders),
+      );
       params.push(...where.params);
       paramTypes.push(...where.paramTypes);
-      parts.push(`WHERE ${where.sql}`);
+      parts.push(
+        `WHERE ${renumberPlaceholders(where.sql, setParamCount)}`,
+      );
     }
 
     const sql = parts.join(' ');
@@ -773,7 +779,10 @@ export class QueryBuilder {
     const parts = [`DELETE FROM ${quoteIdent(this.#state.deleteTable)}`];
 
     if (this.#state.where !== undefined) {
-      const where = compileWhere(this.#state.where, this.#whereCompileOptions(options.usePlaceholders));
+      const where = compileWhere(
+        this.#state.where,
+        this.#whereCompileOptions(options.usePlaceholders),
+      );
       params.push(...where.params);
       paramTypes.push(...where.paramTypes);
       parts.push(`WHERE ${where.sql}`);
@@ -955,9 +964,7 @@ export class QueryBuilder {
         const raw = row[i] ?? null;
         const type = columnTypes?.[column];
         record[column] =
-          type !== undefined
-            ? mapper.fromWire(raw === '' ? null : raw, type)
-            : raw;
+          type !== undefined ? mapper.fromWire(raw, type) : raw;
       }
       return record as T;
     });

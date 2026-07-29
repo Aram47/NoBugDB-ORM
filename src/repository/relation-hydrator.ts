@@ -12,6 +12,8 @@ export interface JoinedRelationSpec {
   readonly ownerAlias: string;
   readonly meta: EntityMetadata;
   readonly relation: RelationMetadata;
+  /** Precomputed JOIN ON clause (owning or inverse O2O). */
+  readonly onClause: string;
 }
 
 /**

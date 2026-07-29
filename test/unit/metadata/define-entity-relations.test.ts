@@ -91,4 +91,47 @@ describe('defineEntity relations', () => {
 
     expect(User.relations).toEqual({});
   });
+
+  it('normalizes inverse one-to-one without local joinColumn', () => {
+    const User = defineEntity<{ id: string }>({
+      name: 'User',
+      tableName: 'users',
+      columns: {
+        id: { type: 'UUID', primary: true },
+      },
+      relations: {
+        profile: {
+          type: 'one-to-one',
+          target: 'Profile',
+          inverseSide: 'user',
+        },
+      },
+    });
+
+    expect(User.relations.profile.joinColumnProperty).toBeUndefined();
+    expect(User.relations.profile.joinColumnDb).toBeUndefined();
+    expect(User.relations.profile.inverseSide).toBe('user');
+  });
+
+  it('keeps owning one-to-one joinColumn when both sides configured', () => {
+    const Profile = defineEntity<{ id: string; userId: string }>({
+      name: 'Profile',
+      tableName: 'profiles',
+      columns: {
+        id: { type: 'UUID', primary: true },
+        userId: { type: 'UUID' },
+      },
+      relations: {
+        user: {
+          type: 'one-to-one',
+          target: 'User',
+          joinColumn: 'userId',
+          inverseSide: 'profile',
+        },
+      },
+    });
+
+    expect(Profile.relations.user.joinColumnProperty).toBe('userId');
+    expect(Profile.relations.user.joinColumnDb).toBe('userId');
+  });
 });

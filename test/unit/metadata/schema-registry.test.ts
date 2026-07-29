@@ -98,4 +98,87 @@ describe('SchemaRegistry', () => {
     expect(tables).toHaveLength(2);
     expect(tables.find((t) => t.entity.name === 'User')?.relations).toHaveLength(1);
   });
+
+  it('assertConsistent passes for inverse one-to-one without local joinColumn', () => {
+    const O2OUser = defineEntity<{ id: string; name: string }>({
+      name: 'O2OUser',
+      tableName: 'o2o_users',
+      columns: {
+        id: { type: 'UUID', primary: true },
+        name: { type: 'STRING' },
+      },
+      relations: {
+        profile: {
+          type: 'one-to-one',
+          target: 'O2OProfile',
+          inverseSide: 'user',
+        },
+      },
+    });
+
+    const O2OProfile = defineEntity<{ id: string; bio: string; userId: string }>({
+      name: 'O2OProfile',
+      tableName: 'o2o_profiles',
+      columns: {
+        id: { type: 'UUID', primary: true },
+        bio: { type: 'STRING' },
+        userId: { type: 'UUID' },
+      },
+      relations: {
+        user: {
+          type: 'one-to-one',
+          target: 'O2OUser',
+          joinColumn: 'userId',
+          inverseSide: 'profile',
+        },
+      },
+    });
+
+    const registry = new MetadataRegistry();
+    registry.register(O2OUser);
+    registry.register(O2OProfile);
+
+    expect(() => new SchemaRegistry(registry).assertConsistent()).not.toThrow();
+  });
+
+  it('rejects inverse one-to-one when owning side lacks joinColumn', () => {
+    const BadUser = defineEntity<{ id: string }>({
+      name: 'BadO2OUser',
+      tableName: 'bad_o2o_users',
+      columns: {
+        id: { type: 'UUID', primary: true },
+      },
+      relations: {
+        profile: {
+          type: 'one-to-one',
+          target: 'BadO2OProfile',
+          inverseSide: 'user',
+        },
+      },
+    });
+
+    // Inverse without joinColumn — both sides non-owning (invalid).
+    const BadProfile = defineEntity<{ id: string }>({
+      name: 'BadO2OProfile',
+      tableName: 'bad_o2o_profiles',
+      columns: {
+        id: { type: 'UUID', primary: true },
+      },
+      relations: {
+        user: {
+          type: 'one-to-one',
+          target: 'BadO2OUser',
+          inverseSide: 'profile',
+        },
+      },
+    });
+
+    const registry = new MetadataRegistry();
+    registry.register(BadUser);
+    registry.register(BadProfile);
+
+    expect(() => new SchemaRegistry(registry).assertConsistent()).toThrowError(
+      expect.objectContaining({ code: 'METADATA' } satisfies Partial<NoBugDbError>),
+    );
+  });
 });

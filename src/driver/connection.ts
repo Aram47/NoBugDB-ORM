@@ -172,7 +172,7 @@ export class Connection {
     if (size > this.#options.maxRequestBytes) {
       throw new NoBugDbError(
         'REQUEST_TOO_LARGE',
-        `Request is ${size} bytes; max is ${this.#options.maxRequestBytes} (NoBugDB ~4 KiB read buffer)`,
+        `Request is ${size} bytes; max is ${this.#options.maxRequestBytes} (NoBugDB 1 MiB read buffer)`,
       );
     }
   }

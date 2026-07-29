@@ -95,11 +95,7 @@ export class RelationLoader {
       .from(meta.tableName, rootAlias);
 
     for (const spec of joins) {
-      const joinColumnDb = spec.relation.joinColumnDb!;
-      const targetPkDb =
-        spec.meta.columns[spec.meta.primaryKeys[0]!]!.columnName;
-      const onClause = `${spec.ownerAlias}.${joinColumnDb} = ${spec.alias}.${targetPkDb}`;
-      qb = qb.leftJoin(spec.meta.tableName, onClause, spec.alias);
+      qb = qb.leftJoin(spec.meta.tableName, spec.onClause, spec.alias);
     }
 
     if (options.where !== undefined) {
@@ -222,6 +218,13 @@ export class RelationLoader {
       aliasCounter.value += 1;
       const path = [...pathPrefix, node.property];
       const prefix = path.join('__');
+      const onClause = this.#buildJoinOnClause(
+        meta,
+        relation,
+        targetMeta,
+        ownerAlias,
+        alias,
+      );
 
       const spec: JoinedRelationSpec = {
         property: node.property,
@@ -231,6 +234,7 @@ export class RelationLoader {
         ownerAlias,
         meta: targetMeta,
         relation,
+        onClause,
       };
       joins.push(spec);
 
@@ -248,6 +252,46 @@ export class RelationLoader {
     }
 
     return { joins, oneToMany };
+  }
+
+  #buildJoinOnClause(
+    ownerMeta: EntityMetadata,
+    relation: RelationMetadata,
+    targetMeta: EntityMetadata,
+    ownerAlias: string,
+    alias: string,
+  ): string {
+    if (relation.joinColumnDb) {
+      const targetPkDb =
+        targetMeta.columns[targetMeta.primaryKeys[0]!]!.columnName;
+      return `${ownerAlias}.${relation.joinColumnDb} = ${alias}.${targetPkDb}`;
+    }
+
+    if (relation.type !== 'one-to-one' || !relation.inverseSide) {
+      throw new NoBugDbError(
+        'METADATA',
+        `Relation "${relation.propertyName}" on "${ownerMeta.name}" requires joinColumn`,
+      );
+    }
+
+    const inverse = targetMeta.relations[relation.inverseSide];
+    if (!inverse?.joinColumnDb) {
+      throw new NoBugDbError(
+        'METADATA',
+        `Inverse relation "${relation.inverseSide}" on "${targetMeta.name}" is not a valid owning side`,
+      );
+    }
+
+    if (ownerMeta.primaryKeys.length !== 1) {
+      throw new NoBugDbError(
+        'METADATA',
+        `Entity "${ownerMeta.name}" has a composite primary key; inverse one-to-one join is not supported`,
+      );
+    }
+
+    const ownerPkDb =
+      ownerMeta.columns[ownerMeta.primaryKeys[0]!]!.columnName;
+    return `${ownerAlias}.${ownerPkDb} = ${alias}.${inverse.joinColumnDb}`;
   }
 
   async #loadOneToMany<T extends object>(

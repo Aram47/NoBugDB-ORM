@@ -8,25 +8,60 @@ export function generateCreateHistoryTableSql(tableName: string): string {
   return `CREATE TABLE ${quoteIdent(tableName)} (id STRING PRIMARY KEY, applied_at STRING NOT NULL)`;
 }
 
+function isMissingTableError(err: unknown): boolean {
+  return (
+    err instanceof NoBugDbError &&
+    err.code === 'SERVER_ERROR' &&
+    /table\s+['`].*?['`]\s+not found/i.test(err.message)
+  );
+}
+
+async function createHistoryTable(
+  executor: QueryExecutor,
+  tableName: string,
+): Promise<void> {
+  try {
+    const create = await executor.query(generateCreateHistoryTableSql(tableName));
+    if (!create.success) {
+      throw new NoBugDbError(
+        'QUERY_FAILED',
+        create.message || `Failed to create history table ${tableName}`,
+      );
+    }
+  } catch (err) {
+    if (err instanceof NoBugDbError && err.code === 'QUERY_FAILED') {
+      throw err;
+    }
+    if (err instanceof NoBugDbError) {
+      throw new NoBugDbError(
+        'QUERY_FAILED',
+        err.message || `Failed to create history table ${tableName}`,
+        { cause: err },
+      );
+    }
+    throw err;
+  }
+}
+
 export async function ensureHistoryTable(
   executor: QueryExecutor,
   tableName = DEFAULT_HISTORY_TABLE,
 ): Promise<void> {
-  const probe = await executor.query(
-    `SELECT id FROM ${quoteIdent(tableName)} LIMIT 1`,
-  );
-
-  if (probe.success) {
-    return;
-  }
-
-  const create = await executor.query(generateCreateHistoryTableSql(tableName));
-  if (!create.success) {
-    throw new NoBugDbError(
-      'QUERY_FAILED',
-      create.message || `Failed to create history table ${tableName}`,
+  try {
+    const probe = await executor.query(
+      `SELECT id FROM ${quoteIdent(tableName)} LIMIT 1`,
     );
+
+    if (probe.success) {
+      return;
+    }
+  } catch (err) {
+    if (!isMissingTableError(err)) {
+      throw err;
+    }
   }
+
+  await createHistoryTable(executor, tableName);
 }
 
 export async function getAppliedIds(

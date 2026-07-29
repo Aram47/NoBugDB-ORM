@@ -185,7 +185,7 @@ Wire values: `DATE` and `UUID` travel as strings; the ORM maps `DATE` ↔ `Date`
 
 ## Limitations
 
-- Server read buffer is ~**4 KiB** — large queries / wide rows fail fast; keep payloads small.
+- Server read buffer is **1 MiB** — oversized queries fail fast with `REQUEST_TOO_LARGE`; keep payloads within the limit.
 - No `SERIAL` / `RETURNING` — UUID PKs auto-generate by default; non-UUID and composite PKs must be supplied by the client.
 
 - No `LIKE` / CTE / `UPSERT`.
@@ -322,7 +322,7 @@ CREATE TABLE orm_migrations (
 );
 ```
 
-**Migration notes:** no auto-generate from entity diff (v2); `ALTER TABLE` support matches NoBugDB engine capabilities; wide DDL may hit the ~4 KiB wire buffer limit.
+**Migration notes:** no auto-generate from entity diff (v2); `ALTER TABLE` support matches NoBugDB engine capabilities; wide DDL may hit the 1 MiB wire buffer limit.
 
 ## Express integration
 

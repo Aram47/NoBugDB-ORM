@@ -29,6 +29,24 @@ describe('protocol parse', () => {
     });
   });
 
+  it('parses SQL NULL marker and empty STRING distinctly', () => {
+    expect(parseResponse('OK|a\tb\tc\n\\N\t\tNULL\n')).toEqual({
+      kind: 'ok',
+      message: '',
+      columns: ['a', 'b', 'c'],
+      rows: [[null, '', 'NULL']],
+    });
+  });
+
+  it('preserves single-column empty STRING row', () => {
+    expect(parseResponse('OK|s\n\n')).toEqual({
+      kind: 'ok',
+      message: '',
+      columns: ['s'],
+      rows: [['']],
+    });
+  });
+
   it('parses DML OK', () => {
     expect(parseResponse('OK|\n')).toEqual({
       kind: 'ok',

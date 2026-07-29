@@ -98,7 +98,7 @@ export function assertValidRoutineParams(
 }
 
 /**
- * Fail-fast if the encoded QUERY frame would exceed the ~4 KiB wire buffer.
+ * Fail-fast if the encoded QUERY frame would exceed the wire buffer (default 1 MiB).
  */
 export function assertRoutineSqlFitsWire(
   sql: string,

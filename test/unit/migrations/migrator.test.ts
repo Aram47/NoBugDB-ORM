@@ -3,6 +3,7 @@ import path from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
+import { NoBugDbError } from '../../../src/driver/errors.js';
 import type { QueryResult } from '../../../src/driver/types.js';
 import type { DataSource } from '../../../src/data-source/data-source.js';
 import { Migrator } from '../../../src/migrations/migrator.js';
@@ -23,7 +24,12 @@ class RecordingExecutor {
 
     if (upper.startsWith('SELECT ID FROM ORM_MIGRATIONS') && upper.includes('LIMIT 1')) {
       if (!this.#historyExists) {
-        return { success: false, message: 'table not found', columns: [], rows: [] };
+        // Mirror Connection.#toQueryResult: SERVER_ERROR throws, no soft-fail.
+        throw new NoBugDbError(
+          'SERVER_ERROR',
+          "Table 'orm_migrations' not found",
+          { sql },
+        );
       }
       return { success: true, message: 'OK', columns: ['id'], rows: [] };
     }
@@ -112,6 +118,20 @@ describe('Migrator', () => {
 
     const pending = await migrator.pending();
     expect(pending).toEqual(['20260728120000_first', '20260728120001_second']);
+  });
+
+  it('creates history table when probe throws SERVER_ERROR missing table', async () => {
+    const dir = await setupMigrations(['20260728120000_first']);
+    const migrator = createMigrator(dir);
+
+    await migrator.up();
+
+    expect(
+      pool.queries.some((q) =>
+        q.includes('CREATE TABLE orm_migrations') ||
+        q.includes('CREATE TABLE "orm_migrations"'),
+      ),
+    ).toBe(true);
   });
 
   it('applies migrations in order and skips on second up', async () => {

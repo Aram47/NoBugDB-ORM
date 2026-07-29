@@ -9,6 +9,11 @@
  * - OK|Goodbye\n
  * - OK|col1\tcol2\n               (SELECT, 0 rows)
  * - OK|col1\tcol2\nrow...\n       (SELECT with rows)
+ *
+ * Cell encoding:
+ * - SQL NULL  → `\N` (decoded to `null`)
+ * - empty STRING → empty cell `""` (kept as `''`)
+ * - STRING `'NULL'` → literal text `NULL`
  */
 
 export type ParsedResponse =
@@ -18,10 +23,17 @@ export type ParsedResponse =
       kind: 'ok';
       message: string;
       columns: string[];
-      rows: string[][];
+      rows: (string | null)[][];
     };
 
 const STATUS_MESSAGES = new Set(['authenticated', 'Goodbye']);
+
+/** Wire marker for SQL NULL (PostgreSQL COPY-compatible). */
+export const WIRE_NULL = '\\N';
+
+function decodeWireCell(cell: string): string | null {
+  return cell === WIRE_NULL ? null : cell;
+}
 
 /**
  * Returns true when `buffer` contains a complete wire response.
@@ -104,15 +116,15 @@ export function parseResponse(buffer: string): ParsedResponse {
 
   const columns = payload.length === 0 ? [] : payload.split('\t');
   const rest = buffer.slice(firstLineEnd + 1);
-  const rows: string[][] = [];
+  const rows: (string | null)[][] = [];
 
   if (rest.length > 0) {
-    const lines = rest.split('\n');
+    // Drop only the final terminating newline so a single empty-string row
+    // (wire: "OK|s\n\n" → rest "\n") becomes one `['']` row, not skipped.
+    const body = rest.endsWith('\n') ? rest.slice(0, -1) : rest;
+    const lines = body.split('\n');
     for (const line of lines) {
-      if (line === '') {
-        continue;
-      }
-      rows.push(line.split('\t'));
+      rows.push(line.split('\t').map(decodeWireCell));
     }
   }
 

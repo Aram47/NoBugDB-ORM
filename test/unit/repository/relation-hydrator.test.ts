@@ -55,6 +55,7 @@ describe('RelationHydrator', () => {
     ownerAlias: 't0',
     meta: User,
     relation: Post.relations.author,
+    onClause: 't0.authorId = t1.id',
   };
 
   it('hydrates many-to-one relation from prefixed columns', () => {
