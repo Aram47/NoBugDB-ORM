@@ -608,7 +608,7 @@ export class QueryBuilder {
     paramTypes: (NoBugDbDataType | undefined)[];
   } {
     const setOp = state.setOperation!;
-    let acc = this.#compileSelectState(setOp.left, options);
+    const acc = this.#compileSelectState(setOp.left, options);
     let sql = acc.sql;
     const params = [...acc.params];
     const paramTypes = [...acc.paramTypes];
