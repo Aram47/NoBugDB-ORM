@@ -9,10 +9,25 @@ In `0.x`, the API may break between minor versions; breaking changes are listed 
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-29
+
 ### Added
 
 - Admin commands: `DataSource.explain` / `explainQuery` / `vacuum` and `EntityManager.explain` / `vacuum` (bare `VACUUM`; EXPLAIN returns raw `QUERY PLAN` lines)
 - Keys and constraints: composite / non-UUID primary keys in `defineEntity` + `Repository.findById`; table-level multi-column `PRIMARY KEY` / `UNIQUE` in migrations (`TableBuilder.primaryKey` / `unique`, ALTER multi-col); UUID PK auto-generate remains default (`generated: 'uuid'`)
+- Query builder set operations: `union` / `unionAll` / `intersect` / `except`
+- Window helpers: `ROW_NUMBER` / `RANK` / `DENSE_RANK` and running `SUM`/`AVG` via `sql.*.over()`
+- Subqueries: `IN` / `EXISTS` / scalar (`whereInSubquery`, `whereExists`, `sql.subquery`, `sql.ref`)
+- Scalar helpers: `COALESCE` / `NULLIF` / `SUBSTRING` / `CAST` / `CURRENT_DATE`
+- Migrations DDL: CHECK, RANGE/HASH partitioning + `PARTITION OF`, triggers, functions/procedures/`CALL`
+
+### Fixed
+
+- TypeScript / ESLint CI failures under `exactOptionalPropertyTypes` and `prefer-const`
+
+### Known limitations
+
+See [README Limitations](./README.md#limitations). Highlights: ~4 KiB wire buffer, no `SERIAL`/`RETURNING`, no `LIKE`/CTE/`UPSERT`, client-supplied non-UUID/composite PKs (UUID auto-generate by default), no runtime introspection, no TLS on the wire.
 
 ## [0.1.1] - 2026-07-28
 
@@ -36,3 +51,4 @@ See [README Limitations](./README.md#limitations). Highlights: ~4 KiB wire buffe
 
 [0.1.0]: https://github.com/Aram47/NoBugDB-ORM/releases/tag/v0.1.0
 [0.1.1]: https://github.com/Aram47/NoBugDB-ORM/releases/tag/v0.1.1
+[0.1.2]: https://github.com/Aram47/NoBugDB-ORM/releases/tag/v0.1.2

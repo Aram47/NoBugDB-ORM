@@ -4,7 +4,7 @@ TypeScript **Data Mapper** ORM for [NoBugDB](https://github.com/Aram47/NoBugDB) 
 
 ## Status
 
-**0.1.0** — first public release: TCP driver, pool, query builder, Data Mapper CRUD, relations, migrations CLI, optional Express subpath.
+**0.1.2** — plan-2 surface: set ops / windows / subqueries / scalars, CHECK & partitioning & routines/triggers in migrations, admin `EXPLAIN`/`VACUUM`, composite / non-UUID PKs.
 
 See [CHANGELOG.md](./CHANGELOG.md). Implementation roadmap: [docs/plans/README.md](./docs/plans/README.md).
 
