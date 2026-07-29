@@ -95,10 +95,12 @@ describe.skipIf(!host)('Keys and constraints live', () => {
       id: number;
       name: string;
     }
-    interface Post {
+    interface PostRow {
       id: number;
       authorId: number;
       title: string;
+    }
+    interface Post extends PostRow {
       author?: Author | null;
     }
 
@@ -110,7 +112,7 @@ describe.skipIf(!host)('Keys and constraints live', () => {
         name: { type: 'STRING' },
       },
     });
-    const Post = defineEntity<Post>({
+    const Post = defineEntity<PostRow>({
       name: `Post_${suffix}`,
       tableName: postsTable,
       columns: {
@@ -140,10 +142,10 @@ describe.skipIf(!host)('Keys and constraints live', () => {
         authorId: 1,
         title: 'Hello',
       });
-      const post = await em.getRepository(Post).findOne({
+      const post = (await em.getRepository(Post).findOne({
         where: { id: 10 },
         relations: ['author'],
-      });
+      })) as Post | null;
       expect(post?.author?.name).toBe('Ada');
       await expect(
         em.getRepository(Author).insert({ name: 'no-id' } as Author),

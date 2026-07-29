@@ -240,7 +240,7 @@ export function defineEntity<T extends object>(
     columns,
     primaryKeys,
     relations,
-  } as EntityMetadata<T>;
+  } as unknown as EntityMetadata<T>;
 
   Object.defineProperty(meta, 'primaryKey', {
     enumerable: true,

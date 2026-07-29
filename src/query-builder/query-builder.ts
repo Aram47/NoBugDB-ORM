@@ -140,8 +140,11 @@ export class QueryBuilder {
     this.#state = state ?? createEmptyState();
   }
 
-  #clone(patch: Partial<QueryBuilderState>): QueryBuilder {
-    return new QueryBuilder(this.#executor, this.#options, {
+  #clone(
+    patch: Partial<QueryBuilderState>,
+    clear?: ReadonlyArray<keyof QueryBuilderState>,
+  ): QueryBuilder {
+    const next: QueryBuilderState = {
       ...this.#state,
       ...patch,
       joins: patch.joins ?? [...this.#state.joins],
@@ -150,11 +153,13 @@ export class QueryBuilder {
       groupBy: patch.groupBy ?? [...this.#state.groupBy],
       orderBy: patch.orderBy ?? [...this.#state.orderBy],
       insertRows: patch.insertRows ?? [...this.#state.insertRows],
-      setOperation:
-        patch.setOperation !== undefined
-          ? patch.setOperation
-          : this.#state.setOperation,
-    });
+    };
+    if (clear !== undefined) {
+      for (const key of clear) {
+        delete next[key];
+      }
+    }
+    return new QueryBuilder(this.#executor, this.#options, next);
   }
 
   #assertKind(expected: QueryKind | QueryKind[]): void {
@@ -388,34 +393,32 @@ export class QueryBuilder {
 
     if (canFlatten) {
       const current = this.#state.setOperation!;
-      return this.#clone({
-        setOperation: {
-          left: current.left,
-          steps: [...current.steps, step],
+      return this.#clone(
+        {
+          setOperation: {
+            left: current.left,
+            steps: [...current.steps, step],
+          },
+          orderBy: [],
         },
-        orderBy: [],
-        limit: undefined,
-        offset: undefined,
-      }) as this;
+        ['limit', 'offset'],
+      ) as this;
     }
 
-    return this.#clone({
-      selectColumns: [],
-      distinct: false,
-      fromTable: undefined,
-      fromAlias: undefined,
-      joins: [],
-      where: undefined,
-      groupBy: [],
-      having: undefined,
-      setOperation: {
-        left: cloneState(this.#state),
-        steps: [step],
+    return this.#clone(
+      {
+        selectColumns: [],
+        distinct: false,
+        joins: [],
+        groupBy: [],
+        setOperation: {
+          left: cloneState(this.#state),
+          steps: [step],
+        },
+        orderBy: [],
       },
-      orderBy: [],
-      limit: undefined,
-      offset: undefined,
-    }) as this;
+      ['fromTable', 'fromAlias', 'where', 'having', 'limit', 'offset'],
+    ) as this;
   }
 
   #assertSelectOperand(builder: QueryBuilder, side: 'left' | 'right'): void {

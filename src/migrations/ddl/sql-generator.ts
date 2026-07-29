@@ -126,8 +126,8 @@ export function generateCreateTableSql(
   checksOrConstraints: readonly CheckConstraintState[] | CreateTableConstraints = [],
 ): string {
   const constraints: CreateTableConstraints = Array.isArray(checksOrConstraints)
-    ? { checks: checksOrConstraints }
-    : checksOrConstraints;
+    ? { checks: checksOrConstraints as readonly CheckConstraintState[] }
+    : (checksOrConstraints as CreateTableConstraints);
   return `CREATE TABLE ${quoteIdent(tableName)} (${renderTableBody(columns, constraints)})`;
 }
 

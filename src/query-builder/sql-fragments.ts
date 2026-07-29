@@ -198,9 +198,7 @@ export const sql = {
     return expression(`LENGTH(${column})`);
   },
 
-  coalesce(
-    ...args: Array<string | SqlExpression | SqlRaw | null>
-  ): SqlExpression {
+  coalesce(...args: ScalarArg[]): SqlExpression {
     if (args.length === 0) {
       throw new NoBugDbError(
         'UNSUPPORTED_SQL',

@@ -235,7 +235,7 @@ export class EntityMapper {
   ): Record<string, unknown> {
     const patch: Record<string, unknown> = {};
     const currentSnapshot = this.takeSnapshot(entity, meta);
-    const pkSet = new Set<string>(meta.primaryKeys as string[]);
+    const pkSet = new Set<string>([...meta.primaryKeys]);
 
     for (const [propertyName, column] of Object.entries(meta.columns) as Array<
       [string, ColumnMetadata]
